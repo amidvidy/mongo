@@ -703,6 +703,7 @@ env.Library("server_options", [
                                 # library has separate options
                      'server_options_core',
                      'server_parameters',
+                     '$BUILD_DIR/mongo/db/fts/stop_words',
                      '$BUILD_DIR/mongo/util/cmdline_utils/cmdline_utils',
                      '$BUILD_DIR/mongo/util/options_parser/options_parser',
                     ])

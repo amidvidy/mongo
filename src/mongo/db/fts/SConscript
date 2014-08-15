@@ -26,6 +26,11 @@ env.Command( [ "stop_words_list.h", "stop_words_list.cpp"],
 
 baseEnv=env.Clone()
 baseEnv.InjectThirdPartyIncludePaths(libraries=['stemmer'])
+
+env.Library('stop_words', [
+        'stop_words.cpp',
+        ])
+
 baseEnv.Library('base', [
         'fts_index_format.cpp',
         'fts_matcher.cpp',
@@ -36,13 +41,14 @@ baseEnv.Library('base', [
         'fts_util.cpp',
         'fts_element_iterator.cpp',
         'stemmer.cpp',
-        'stop_words.cpp',
+        #'stop_words.cpp',
         'stop_words_list.cpp',
         'tokenizer.cpp',
         ], LIBDEPS=["$BUILD_DIR/mongo/base/base",
                     "$BUILD_DIR/mongo/db/common",
                     "$BUILD_DIR/mongo/platform/platform",
-                    "$BUILD_DIR/third_party/shim_stemmer"
+                    "$BUILD_DIR/third_party/shim_stemmer",
+                    "stop_words"
                     ])
 
 env.Library( 'server_common', [
