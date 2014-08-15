@@ -39,6 +39,7 @@
 
 #include "mongo/base/status.h"
 #include "mongo/bson/util/builder.h"
+#include "mongo/db/fts/stop_words.h"
 #include "mongo/db/server_options.h"
 #include "mongo/db/server_parameters.h"
 #include "mongo/logger/log_component.h"
@@ -326,6 +327,9 @@ namespace {
                 "Enable command computing aggregate statistics on storage.")
                                   .hidden()
                                   .setSources(moe::SourceAllLegacy);
+
+        options->addOptionChaining("textSearch.stopWordLists", "textSearchStopWordLists",
+                                   moe::StringMap, "Override language specific stop word lists");
 
         return Status::OK();
     }
@@ -943,6 +947,14 @@ namespace {
             return ret;
         }
 #endif
+
+        if (params.count("textSearch.stopWordLists")) {
+            // TODO: make path absolute?
+            std::map<std::string, std::string> stopWordLists =
+                params["textSearch.stopWordLists"].as<std::map<std::string, std::string> >();
+
+            fts::StopWords::setStopWordListPaths(stopWordLists);
+        }
 
         return Status::OK();
     }
