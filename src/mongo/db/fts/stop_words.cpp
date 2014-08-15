@@ -28,15 +28,22 @@
 *    it in the license file.
 */
 
-#include <set>
-#include <string>
+#include "mongo/platform/basic.h"
 
 #include "mongo/db/fts/stop_words.h"
 
+#include <boost/filesystem.hpp>
+#include <boost/shared_ptr.hpp>
+#include <set>
+#include <string>
+#include <fstream>
+
+#include "mongo/db/fts/fts_language.h"
+#include "mongo/db/fts/fts_util.h"
 #include "mongo/base/init.h"
+#include "mongo/util/log.h"
+#include "mongo/util/mongoutils/str.h"
 #include "mongo/util/string_map.h"
-
-
 
 namespace mongo {
 
@@ -45,7 +52,8 @@ namespace mongo {
         void loadStopWordMap( StringMap< std::set< std::string > >* m );
 
         namespace {
-            StringMap<StopWords*> STOP_WORDS;
+            std::map<std::string, std::string> stopWordListPaths;
+            StringMap<boost::shared_ptr<StopWords> > STOP_WORDS;
             StopWords* empty = NULL;
         }
 
@@ -59,23 +67,75 @@ namespace mongo {
         }
 
         const StopWords* StopWords::getStopWords( const FTSLanguage& language ) {
-            StringMap<StopWords*>::const_iterator i = STOP_WORDS.find( language.str() );
+            StringMap<boost::shared_ptr<StopWords> >::const_iterator i = STOP_WORDS.find( language.str() );
             if ( i == STOP_WORDS.end() )
                 return empty;
-            return i->second;
+            return i->second.get();
         }
 
+        // static, called during option parsing
+        void StopWords::setStopWordListPaths( const std::map<std::string, std::string>& paths ) {
+            log() << "Setting stopWordListPaths" << std::endl;
+            stopWordListPaths = paths;
+        }
 
-        MONGO_INITIALIZER(StopWords)(InitializerContext* context) {
+        MONGO_INITIALIZER_WITH_PREREQUISITES(StopWords, ("EndStartupOptionStorage",
+                                                         "FTSAllLanguagesRegistered"))
+            (InitializerContext* context) {
+
+            
             empty = new StopWords();
-
+            // Load
             StringMap< std::set< std::string > > raw;
             loadStopWordMap( &raw );
             for ( StringMap< std::set< std::string > >::const_iterator i = raw.begin();
                   i != raw.end();
                   ++i ) {
-                STOP_WORDS[i->first] = new StopWords( i->second );
+                STOP_WORDS[i->first] = boost::shared_ptr<StopWords>(new StopWords( i->second ));
             }
+
+            for (std::map<std::string, std::string>::const_iterator i = stopWordListPaths.begin();
+                 i != stopWordListPaths.end();
+                 ++i) {
+
+                log() << i->first << ":" << i->second << std::endl;
+                
+                // lookup language
+                StatusWithFTSLanguage swl = FTSLanguage::make(i->first, TEXT_INDEX_VERSION_2);
+                if (!swl.getStatus().isOK()) {
+                    return swl.getStatus();
+                }
+                
+                if (!boost::filesystem::is_regular_file(i->second)) {
+                    return Status(ErrorCodes::BadValue,
+                                  str::stream() << "Specified invalid file: " << i->second
+                                  << " for " << i->first << " stop words");
+                }
+
+                // TODO ensure file encoding is UTF8 or ASCII
+                // TODO unicode safety in general
+                std::ifstream stopwords(i->second.c_str());
+
+                if (!stopwords.is_open()) {
+                    return Status(ErrorCodes::BadValue,
+                                  str::stream() << "Unable to open file: " << i->second
+                                  << " for " << i->first << " stop words");
+                }
+
+                log() << "Loading " << i->first << std::endl;
+
+                std::set<std::string> rawWords;
+
+                for (std::string stopword; std::getline(stopwords, stopword); ) {
+                    log() << "Got " << stopword << std::endl;
+                    rawWords.insert(stopword);
+                }
+                // use canonical name as key
+                // this can result in a default stop word list getting overwritteen,
+                // so we use shared_ptr to ensure no memory leaks
+                STOP_WORDS[swl.getValue()->str()] = boost::shared_ptr<StopWords>(new StopWords(rawWords));
+            }
+
             return Status::OK();
         }
 

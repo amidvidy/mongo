@@ -45,6 +45,7 @@ namespace mongo {
         public:
             StopWords();
             StopWords( const std::set<std::string>& words );
+            ~StopWords(){}
 
             bool isStopWord( const std::string& word ) const {
                 return _words.count( word ) > 0;
@@ -53,8 +54,11 @@ namespace mongo {
             size_t numStopWords() const { return _words.size(); }
 
             static const StopWords* getStopWords( const FTSLanguage& language );
+
+            // Called by the options parser
+            static void setStopWordListPaths( const std::map<std::string, std::string>& paths );
+            static const std::string getStopWordListsDigest();
         private:
-            ~StopWords(){}
             unordered_set<std::string> _words;
         };
 
