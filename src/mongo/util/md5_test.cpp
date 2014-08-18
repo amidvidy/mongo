@@ -28,11 +28,33 @@
  */
 
 #include "mongo/unittest/unittest.h"
+#include "mongo/util/md5.h"
+#include "mongo/util/md5.hpp"
 
 extern int do_md5_test(void);
 
 namespace mongo {
     TEST( MD5, BuiltIn1 ) {
         ASSERT_EQUALS( 0, do_md5_test() );
+    }
+
+    TEST(MD5, MD5Builder) {
+        MD5Builder m;
+
+        m << "h";
+        m << "e";
+        m << "l";
+        m << "l";
+        m << "o";
+        m << ",";
+        m << " ";
+        m << std::string("world");
+
+        ASSERT_EQUALS(m.digest(), md5simpledigest("hello, world"));
+    }
+
+    TEST(MD5, MD5BuilderNoInput) {
+        MD5Builder m;
+        ASSERT_EQUALS(m.digest(), md5simpledigest(""));
     }
 }
