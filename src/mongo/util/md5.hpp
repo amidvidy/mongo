@@ -31,6 +31,7 @@
 
 #include "mongo/util/md5.h"
 
+#include <boost/noncopyable.hpp>
 #include <sstream>
 #include <string>
 #include <string.h>
@@ -49,7 +50,7 @@ namespace mongo {
     inline void md5(const char *str, md5digest digest) {
         md5(str, strlen(str), digest);
     }
-    
+
     inline std::string digestToString( md5digest digest ){
         static const char * letters = "0123456789abcdef";
         std::stringstream ss;
@@ -69,6 +70,33 @@ namespace mongo {
     inline std::string md5simpledigest( const std::string& s ){
         return md5simpledigest(s.data(), s.size());
     }
+
+    /**
+     * Used when we want to build up a digest from a large (potentially
+     * unbounded) amount of input. Computes the md5 state incrementally
+     * as data is appended.
+     *
+     * TODO: add buffering
+     */
+    class MD5Builder : public boost::noncopyable {
+    public:
+        MD5Builder() { md5_init(&_st); }
+        ~MD5Builder() {}
+
+        MD5Builder& operator<<(const StringData& str) {
+            md5_append(&_st, reinterpret_cast<const md5_byte_t*>(str.rawData()), str.size());
+            return *this;
+        }
+
+        std::string digest() {
+            md5digest d;
+            md5_finish(&_st, d);
+            return digestToString(d);
+        }
+
+    private:
+        md5_state_t _st;
+    };
 
 
 } // namespace mongo
