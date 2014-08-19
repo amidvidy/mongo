@@ -29,6 +29,7 @@
 
 #pragma once
 
+#include <iterator>
 #include <boost/smart_ptr/scoped_array.hpp>
 
 #include "mongo/base/disallow_copying.h"
@@ -162,6 +163,13 @@ namespace mongo {
                 return *this;
             }
 
+            // post-increment
+            const_iterator operator++(int) { 
+                const_iterator tmp = *this;
+                ++(*this);
+                return tmp;
+            }
+
             bool operator==( const const_iterator& other ) const {
                 return _position == other._position;
             }
@@ -169,6 +177,12 @@ namespace mongo {
                 return _position != other._position;
             }
 
+            // SERVER-14960 Make UnorderedFastKeyTable::const_iterator STL-compliant
+            typedef std::forward_iterator_tag iterator_category;
+            typedef value_type value_type;
+            typedef value_type& reference;
+            typedef value_type* pointer;
+            typedef std::ptrdiff_t difference_type;
         private:
 
             void _skip() {
