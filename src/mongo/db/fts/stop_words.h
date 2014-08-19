@@ -31,37 +31,73 @@
 
 #pragma once
 
+#include <boost/noncopyable.hpp>
+#include <boost/shared_ptr.hpp>
 #include <set>
 #include <string>
 
-#include "mongo/db/fts/fts_language.h"
 #include "mongo/platform/unordered_set.h"
+#include "mongo/util/string_map.h"
 
 namespace mongo {
 
     namespace fts {
+        class FTSLanguage;
 
+        void enableUserConfigurableStopWords( const std::map<std::string, std::string>& paths );
+
+        // Represents stop words for a particular language
         class StopWords {
+            friend class StopWordsLoader;
         public:
             StopWords();
             StopWords( const std::set<std::string>& words );
-            ~StopWords(){}
-
+            ~StopWords() {}
             bool isStopWord( const std::string& word ) const {
                 return _words.count( word ) > 0;
             }
 
             size_t numStopWords() const { return _words.size(); }
 
-            static const StopWords* getStopWords( const FTSLanguage& language );
-
-            // Called by the options parser
-            static void setStopWordListPaths( const std::map<std::string, std::string>& paths );
-            static const std::string getStopWordListsDigest();
         private:
             unordered_set<std::string> _words;
         };
 
+        // Responsible for loading stopwords. Used to reduce dependence on global state and to increase
+        // testability
+        class StopWordsLoader : public boost::noncopyable {
+        public:
+            StopWordsLoader() {}
+            virtual ~StopWordsLoader() {}
+
+            virtual Status load();
+
+            const StopWords* const getStopWords(const FTSLanguage& language) const;
+            // Instance is set during static initialization
+            static StopWordsLoader* getLoader();
+
+            const std::string& getStopWordListsDigest() const;
+
+            static const std::string computeStopWordListsDigest(const StringMap<StopWords*>& stopWords);
+        protected:
+            StringMap<StopWords*> _stopWords;
+        private:
+            std::string _stopWordListsDigest;
+            StopWords _empty;
+        };
+
+        class UserConfigurableStopWordsLoader : public StopWordsLoader {
+        public:
+            UserConfigurableStopWordsLoader(const std::map<std::string, std::string>& stopWordLists)
+                : _stopWordLists(stopWordLists)
+            {}
+            virtual ~UserConfigurableStopWordsLoader() {}
+
+            virtual Status load();
+        protected:
+            // Paths to user configured stop words
+            const std::map<std::string, std::string> _stopWordLists;
+        };
+
     }
 }
-

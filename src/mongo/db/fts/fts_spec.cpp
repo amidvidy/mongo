@@ -166,7 +166,7 @@ namespace mongo {
             while ( it.more() ) {
                 FTSIteratorValue val = it.next();
                 Stemmer stemmer( *val._language );
-                Tools tools( *val._language, &stemmer, StopWords::getStopWords( *val._language ) );
+                Tools tools( *val._language, &stemmer, StopWordsLoader::getLoader()->getStopWords( *val._language ) );
                 _scoreStringV2( tools, val._text, term_freqs, val._weight );
             }
         }

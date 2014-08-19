@@ -161,7 +161,7 @@ namespace mongo {
             const FTSLanguage& language = _getLanguageToUseV1( obj );
 
             Stemmer stemmer(language);
-            Tools tools(language, &stemmer, StopWords::getStopWords( language ));
+            Tools tools(language, &stemmer, StopWordsLoader::getLoader()->getStopWords( language ));
 
             if ( wildcard() ) {
                 // if * is specified for weight, we can recurse over all fields.

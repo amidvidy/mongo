@@ -953,7 +953,7 @@ namespace {
             std::map<std::string, std::string> stopWordLists =
                 params["textSearch.stopWordLists"].as<std::map<std::string, std::string> >();
 
-            fts::StopWords::setStopWordListPaths(stopWordLists);
+            fts::enableUserConfigurableStopWords(stopWordLists);
         }
 
         return Status::OK();

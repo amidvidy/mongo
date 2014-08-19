@@ -32,18 +32,19 @@
 
 #include "mongo/db/fts/stop_words.h"
 
+#include <algorithm>
 #include <boost/filesystem.hpp>
 #include <boost/shared_ptr.hpp>
 #include <set>
 #include <string>
 #include <fstream>
 
+#include "mongo/base/init.h"
 #include "mongo/db/fts/fts_language.h"
 #include "mongo/db/fts/fts_util.h"
-#include "mongo/base/init.h"
 #include "mongo/util/log.h"
+#include "mongo/util/md5.hpp"
 #include "mongo/util/mongoutils/str.h"
-#include "mongo/util/string_map.h"
 
 namespace mongo {
 
@@ -52,13 +53,14 @@ namespace mongo {
         void loadStopWordMap( StringMap< std::set< std::string > >* m );
 
         namespace {
+            // Configuration options
+            bool userConfigurableStopWordsEnabled = false;
             std::map<std::string, std::string> stopWordListPaths;
-            StringMap<boost::shared_ptr<StopWords> > STOP_WORDS;
-            StopWords* empty = NULL;
+            // set in MONGO_INITIALIZER
+            StopWordsLoader* LOADER;
         }
 
-
-        StopWords::StopWords(){
+        StopWords::StopWords() {
         }
 
         StopWords::StopWords( const std::set<std::string>& words ) {
@@ -66,46 +68,80 @@ namespace mongo {
                 _words.insert( *i );
         }
 
-        const StopWords* StopWords::getStopWords( const FTSLanguage& language ) {
-            StringMap<boost::shared_ptr<StopWords> >::const_iterator i = STOP_WORDS.find( language.str() );
-            if ( i == STOP_WORDS.end() )
-                return empty;
-            return i->second.get();
-        }
-
-        // static, called during option parsing
-        void StopWords::setStopWordListPaths( const std::map<std::string, std::string>& paths ) {
-            log() << "Setting stopWordListPaths" << std::endl;
+        void enableUserConfigurableStopWords(const std::map<std::string, std::string>& paths) {
+            userConfigurableStopWordsEnabled = true;
             stopWordListPaths = paths;
         }
 
-        MONGO_INITIALIZER_WITH_PREREQUISITES(StopWords, ("EndStartupOptionStorage",
-                                                         "FTSAllLanguagesRegistered"))
-            (InitializerContext* context) {
+        const StopWords* const StopWordsLoader::getStopWords(const FTSLanguage& language) const {
+            StringMap<StopWords*>::const_iterator i = _stopWords.find( language.str() );
+            if ( i == _stopWords.end() )
+                return &_empty;
+            return i->second;
+        }
 
-            
-            empty = new StopWords();
-            // Load
+        StopWordsLoader* StopWordsLoader::getLoader() {
+            invariant(LOADER);
+            return LOADER;
+        }
+
+        const std::string& StopWordsLoader::getStopWordListsDigest() const {
+            return _stopWordListsDigest;
+        }
+
+        const std::string StopWordsLoader::computeStopWordListsDigest(const StringMap<StopWords*>& stopWords) {
+            MD5Builder md5;
+            // Sort language names
+            std::vector<std::pair<std::string, StopWords*> > languages(stopWords.begin(), stopWords.end());
+            // Pair sorts by lexicographic ordering of elements
+            // Since each string key is unique, ordering is well defined
+            std::sort(languages.begin(), languages.end());
+
+            for (std::vector<std::pair<std::string, StopWords*> >::const_iterator l = languages.begin();
+                 l != languages.end();
+                 ++l) {
+
+                std::vector<std::string> sortedWords(l->second->_words.begin(), l->second->_words.end());
+                std::sort(sortedWords.begin(), sortedWords.end());
+
+                for (std::vector<std::string>::const_iterator sw = sortedWords.begin();
+                     sw != sortedWords.end();
+                     ++sw) {
+                    md5 << *sw;
+                }
+            }
+            return md5.digest();
+        }
+
+        Status StopWordsLoader::load() {
             StringMap< std::set< std::string > > raw;
             loadStopWordMap( &raw );
             for ( StringMap< std::set< std::string > >::const_iterator i = raw.begin();
                   i != raw.end();
                   ++i ) {
-                STOP_WORDS[i->first] = boost::shared_ptr<StopWords>(new StopWords( i->second ));
+                _stopWords[i->first] = new StopWords( i->second );
             }
+            return Status::OK();
+        }
+
+        Status UserConfigurableStopWordsLoader::load() {
+            // Load default stop words first
+            StopWordsLoader::load();
+
+            log() << "Loading custom stopwords" << std::endl;
 
             for (std::map<std::string, std::string>::const_iterator i = stopWordListPaths.begin();
                  i != stopWordListPaths.end();
                  ++i) {
 
-                log() << i->first << ":" << i->second << std::endl;
-                
-                // lookup language
+                // lookup language - needed to verify it is valid and to canonicalize it. Also
+                // handles language aliases e.g. 'english' vs. 'en'
                 StatusWithFTSLanguage swl = FTSLanguage::make(i->first, TEXT_INDEX_VERSION_2);
                 if (!swl.getStatus().isOK()) {
                     return swl.getStatus();
+                    // TODO: what is the error here, and how can we improve it?
                 }
-                
+
                 if (!boost::filesystem::is_regular_file(i->second)) {
                     return Status(ErrorCodes::BadValue,
                                   str::stream() << "Specified invalid file: " << i->second
@@ -131,14 +167,34 @@ namespace mongo {
                     rawWords.insert(stopword);
                 }
                 // use canonical name as key
-                // this can result in a default stop word list getting overwritteen,
-                // so we use shared_ptr to ensure no memory leaks
-                STOP_WORDS[swl.getValue()->str()] = boost::shared_ptr<StopWords>(new StopWords(rawWords));
-            }
+                // this will result in a default stop word list getting overwritten
+                // so we must free the memory
 
+                // TODO: maybe switch to boost::shared_ptr to avoid the call to delete?
+                // or add ability to reset the _words within a StopWords object
+                StringMap<StopWords*>::const_iterator old = _stopWords.find(swl.getValue()->str());
+                invariant(old != _stopWords.end());
+                delete old->second;
+
+                _stopWords[swl.getValue()->str()] = new StopWords(rawWords);
+            }
             return Status::OK();
+
         }
 
+        MONGO_INITIALIZER_WITH_PREREQUISITES(LoadStopWords, ("EndStartupOptionStorage",
+                                                             "FTSAllLanguagesRegistered"))
+            (InitializerContext* context) {
+
+            if (userConfigurableStopWordsEnabled) {
+                LOADER = new UserConfigurableStopWordsLoader(stopWordListPaths);
+            }
+            else {
+                LOADER = new StopWordsLoader();
+            }
+
+            return LOADER->load();
     }
 
-}
+    }  // namespace fts
+}  // namespace mongo

@@ -51,7 +51,7 @@ namespace mongo {
             }
             _language = swl.getValue();
 
-            const StopWords* stopWords = StopWords::getStopWords( *_language );
+            const StopWords* stopWords = StopWordsLoader::getLoader()->getStopWords( *_language );
             Stemmer stemmer( *_language );
 
             bool inNegation = false;
