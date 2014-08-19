@@ -29,6 +29,7 @@
 
 #pragma once
 
+#include <iterator>
 #include <boost/smart_ptr/scoped_array.hpp>
 
 #include "mongo/base/disallow_copying.h"
@@ -134,6 +135,13 @@ namespace mongo {
             friend class UnorderedFastKeyTable;
 
         public:
+            // SERVER-14960 Make UnorderedFastKeyTable::const_iterator STL-compliant
+            typedef std::forward_iterator_tag iterator_category;
+            typedef typename UnorderedFastKeyTable::value_type value_type;
+            typedef const value_type& reference;
+            typedef const value_type* pointer;
+            typedef std::ptrdiff_t difference_type;
+
             const_iterator() { _position = -1; }
             const_iterator( const Area* area ) {
                 _area = area;
@@ -147,9 +155,9 @@ namespace mongo {
                 _max = pos;
             }
 
-            const value_type* operator->() const { return &_area->_entries[_position].data; }
+            pointer operator->() const { return &_area->_entries[_position].data; }
 
-            const value_type& operator*() const { return _area->_entries[_position].data; }
+            reference operator*() const { return _area->_entries[_position].data; }
 
             const_iterator operator++() {
                 if ( _position < 0 )
@@ -160,6 +168,13 @@ namespace mongo {
                 else
                     _skip();
                 return *this;
+            }
+
+            // post-increment
+            const_iterator operator++(int) {
+                const_iterator tmp = *this;
+                ++(*this);
+                return tmp;
             }
 
             bool operator==( const const_iterator& other ) const {
@@ -224,4 +239,3 @@ namespace mongo {
 }
 
 #include "mongo/util/unordered_fast_key_table_internal.h"
-
