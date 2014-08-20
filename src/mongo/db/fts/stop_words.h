@@ -45,6 +45,7 @@ namespace mongo {
         class FTSLanguage;
 
         void enableUserConfigurableStopWords( const std::map<std::string, std::string>& paths );
+        //const bool userConfigurableStopWordsEnabled();
 
         // Represents stop words for a particular language
         class StopWords {
@@ -81,8 +82,9 @@ namespace mongo {
             static const std::string computeStopWordListsDigest(const StringMap<StopWords*>& stopWords);
         protected:
             StringMap<StopWords*> _stopWords;
-        private:
+            void loadDefaultStopWords();
             std::string _stopWordListsDigest;
+        private:
             StopWords _empty;
         };
 
