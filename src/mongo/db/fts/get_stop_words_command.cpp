@@ -73,6 +73,8 @@ namespace mongo {
         (InitializerContext* context) {
             // Intentionally leaked, commands register themselves
         new GetStopWordsCommand();
+
+        return Status::OK();
     }
 
     }
