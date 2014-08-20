@@ -85,6 +85,11 @@ namespace mongo {
             return LOADER;
         }
 
+        StopWordsLoader* StopWordsLoader::setLoader(StopWordsLoader* loader) {
+            std::swap(LOADER, loader);
+            return loader;
+        }
+
         const std::string& StopWordsLoader::getStopWordListsDigest() const {
             return _stopWordListsDigest;
         }
@@ -116,12 +121,14 @@ namespace mongo {
 
 
         Status StopWordsLoader::load() {
-            loadDefaultStopWords();
-            _stopWordListsDigest = computeStopWordListsDigest(_stopWords);
-            return Status::OK();
+            Status status = _load();
+            if (status.isOK()) {
+                _stopWordListsDigest = computeStopWordListsDigest(_stopWords);
+            }
+            return status;
         }
 
-        void StopWordsLoader::loadDefaultStopWords() {
+        Status StopWordsLoader::_load() {
             StringMap< std::set< std::string > > raw;
             loadStopWordMap( &raw );
             for ( StringMap< std::set< std::string > >::const_iterator i = raw.begin();
@@ -129,11 +136,12 @@ namespace mongo {
                   ++i ) {
                 _stopWords[i->first] = new StopWords( i->second );
             }
+            return Status::OK();
         }
 
-        Status UserConfigurableStopWordsLoader::load() {
+        Status UserConfigurableStopWordsLoader::_load() {
             // Load default stop words first
-            StopWordsLoader::loadDefaultStopWords();
+            StopWordsLoader::_load();
 
             log() << "Loading custom stopwords" << std::endl;
 
@@ -185,9 +193,7 @@ namespace mongo {
 
                 _stopWords[swl.getValue()->str()] = new StopWords(rawWords);
             }
-            _stopWordListsDigest = computeStopWordListsDigest(_stopWords);
             return Status::OK();
-
         }
 
         MONGO_INITIALIZER_WITH_PREREQUISITES(LoadStopWords, ("EndStartupOptionStorage",

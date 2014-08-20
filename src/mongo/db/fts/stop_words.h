@@ -71,21 +71,24 @@ namespace mongo {
             StopWordsLoader() {}
             virtual ~StopWordsLoader() {}
 
-            virtual Status load();
+            Status load();
 
             const StopWords* const getStopWords(const FTSLanguage& language) const;
+
             // Instance is set during static initialization
             static StopWordsLoader* getLoader();
+            // For testing
+            static StopWordsLoader* setLoader(StopWordsLoader* loader);
 
             const std::string& getStopWordListsDigest() const;
 
             static const std::string computeStopWordListsDigest(const StringMap<StopWords*>& stopWords);
         protected:
             StringMap<StopWords*> _stopWords;
-            void loadDefaultStopWords();
-            std::string _stopWordListsDigest;
+            virtual Status _load();
         private:
             StopWords _empty;
+            std::string _stopWordListsDigest;
         };
 
         class UserConfigurableStopWordsLoader : public StopWordsLoader {
@@ -94,9 +97,8 @@ namespace mongo {
                 : _stopWordLists(stopWordLists)
             {}
             virtual ~UserConfigurableStopWordsLoader() {}
-
-            virtual Status load();
         protected:
+            virtual Status _load();
             // Paths to user configured stop words
             const std::map<std::string, std::string> _stopWordLists;
         };

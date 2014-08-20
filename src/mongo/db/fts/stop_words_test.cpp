@@ -28,9 +28,13 @@
 *    it in the license file.
 */
 
+#include <set>
+
 #include "mongo/db/fts/fts_spec.h"
 #include "mongo/db/fts/stop_words.h"
 #include "mongo/unittest/unittest.h"
+#include "mongo/util/md5.hpp"
+#include "mongo/util/scopeguard.h"
 
 namespace mongo {
     namespace fts {
@@ -41,5 +45,35 @@ namespace mongo {
             ASSERT( !englishStopWords->isStopWord( "computer" ) );
         }
 
+        class MockStopWordsLoader : public StopWordsLoader {
+        public:
+            void setStopWordsFor(const std::string& language, const std::set<std::string>& words) {
+                _stopWords[language] = new StopWords(words);
+            }
+        protected:
+            virtual Status _load() { return Status::OK(); }
+
+        };
+
+        TEST( Loader, DigestsCorrectly1 ) {
+            MockStopWordsLoader loader;
+
+            std::set<std::string> words;
+            words.insert("x");
+            words.insert("y");
+            words.insert("z");
+
+            loader.setStopWordsFor("a", words);
+            loader.setStopWordsFor("b", words);
+            loader.setStopWordsFor("c", words);
+
+            // setLoader returns old loader
+            ON_BLOCK_EXIT(StopWordsLoader::setLoader, StopWordsLoader::setLoader(&loader));
+            ASSERT_OK(StopWordsLoader::getLoader()->load());
+
+            MD5Builder d;
+            d << "xyz" << "xyz" << "xyz";
+            ASSERT_EQUALS(StopWordsLoader::getLoader()->getStopWordListsDigest(), d.digest());
+        }
     }
 }
