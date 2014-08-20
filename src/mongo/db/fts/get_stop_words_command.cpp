@@ -30,18 +30,19 @@
 
 #include <algorithm>
 
+#include "mongo/base/init.h"
 #include "mongo/db/commands.h"
 #include "mongo/db/fts/stop_words.h"
 #include "mongo/util/string_map.h"
 
 namespace mongo {
-    
+
     namespace fts {
 
     class GetStopWordsCommand : public Command {
     public:
         GetStopWordsCommand() : Command("getStopWords") {}
-        
+
         virtual bool slaveOk() const { return true; }
         virtual bool isWriteCommandForConfigServer() const { return false; }
         virtual void addRequiredPrivileges(const std::string& dbname,
@@ -50,8 +51,11 @@ namespace mongo {
         virtual bool run(OperationContext* txn, const string& dbname, BSONObj& cmdObj, int, string& errmsg,
                  BSONObjBuilder& result, bool fromRepl) {
 
-            const StringMap<StopWords*>& stopWords(StopWordsLoader::getLoader()->getStopWords());
+            // Add digest
+            result.append("stopWordListsDigest",
+                          StopWordsLoader::getLoader()->getStopWordListsDigest());
 
+            const StringMap<StopWords*>& stopWords(StopWordsLoader::getLoader()->getStopWords());
             // Order of each language is undefined, but stop words are sorted per language
             for (StringMap<StopWords*>::const_iterator i = stopWords.begin();
                  i != stopWords.end();
