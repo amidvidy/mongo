@@ -52,10 +52,9 @@ namespace mongo {
             }
         protected:
             virtual Status _load() { return Status::OK(); }
-
         };
 
-        TEST( Loader, DigestsCorrectly1 ) {
+        TEST(Loader, DigestsCorrectly1) {
             MockStopWordsLoader loader;
 
             std::set<std::string> words;
@@ -73,6 +72,45 @@ namespace mongo {
 
             MD5Builder d;
             d << "xyz" << "xyz" << "xyz";
+            ASSERT_EQUALS(StopWordsLoader::getLoader()->getStopWordListsDigest(), d.digest());
+        }
+
+        //  This will probably not work correctly on windows
+        //  Even though we don't support these languages, their UTF-8 code points should still
+        //  digest deterministically
+        TEST(Loader, DigestsUnicodeCorrectly) {
+            MockStopWordsLoader loader;
+
+            std::set<std::string> hebrew;
+            hebrew.insert("א");
+            hebrew.insert("ב");
+            hebrew.insert("ג");
+            hebrew.insert("ד");
+            loader.setStopWordsFor("hebrew", hebrew);
+
+            std::set<std::string> japanese;  // using katakana (syllables)
+            japanese.insert("ヰ");
+            japanese.insert("ヱ");
+            japanese.insert("ヲ");
+            japanese.insert("ン");
+            loader.setStopWordsFor("japanese", japanese);
+            
+            std::set<std::string> emoji;  // couldn't resist
+            emoji.insert("😋");
+            emoji.insert("😌");
+            emoji.insert("😍");
+            emoji.insert("😏");
+            loader.setStopWordsFor("emoji", emoji);
+
+            ON_BLOCK_EXIT(StopWordsLoader::setLoader, StopWordsLoader::setLoader(&loader));
+            ASSERT_OK(StopWordsLoader::getLoader()->load());
+            
+            MD5Builder d;
+
+            d << "😋"  << "😌" << "😍" << "😏";
+            d << "א" << "ב" << "ג" << "ד"; 
+            d << "ヰ" << "ヱ" << "ヲ" << "ン";
+
             ASSERT_EQUALS(StopWordsLoader::getLoader()->getStopWordListsDigest(), d.digest());
         }
     }
