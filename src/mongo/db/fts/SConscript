@@ -53,7 +53,8 @@ baseEnv.Library('base', [
 
 env.Library( 'server_common', [
              'fts_command.cpp',
-             'fts_enabled.cpp'
+             'fts_enabled.cpp',
+             'get_stop_words_command.cpp'
              ] )
 
 env.Library('ftsmongod', [

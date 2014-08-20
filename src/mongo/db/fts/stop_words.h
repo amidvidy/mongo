@@ -49,7 +49,6 @@ namespace mongo {
 
         // Represents stop words for a particular language
         class StopWords {
-            friend class StopWordsLoader;
         public:
             StopWords();
             StopWords( const std::set<std::string>& words );
@@ -59,6 +58,10 @@ namespace mongo {
             }
 
             size_t numStopWords() const { return _words.size(); }
+
+            typedef unordered_set<std::string>::const_iterator const_iterator;
+            const_iterator begin() const { return _words.begin(); }
+            const_iterator end() const { return _words.end(); }
 
         private:
             unordered_set<std::string> _words;
@@ -73,11 +76,13 @@ namespace mongo {
 
             Status load();
 
+            // These can be called concurrently as they are read-only
             const StopWords* const getStopWords(const FTSLanguage& language) const;
+            const StringMap<StopWords*>& getStopWords() const { return _stopWords; }
 
             // Instance is set during static initialization
             static StopWordsLoader* getLoader();
-            // For testing
+            // For testing, returns original loader
             static StopWordsLoader* setLoader(StopWordsLoader* loader);
 
             const std::string& getStopWordListsDigest() const;

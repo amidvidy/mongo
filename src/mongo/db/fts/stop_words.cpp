@@ -106,7 +106,7 @@ namespace mongo {
                  l != languages.end();
                  ++l) {
 
-                std::vector<std::string> sortedWords(l->second->_words.begin(), l->second->_words.end());
+                std::vector<std::string> sortedWords(l->second->begin(), l->second->end());
                 std::sort(sortedWords.begin(), sortedWords.end());
 
                 for (std::vector<std::string>::const_iterator sw = sortedWords.begin();
@@ -117,8 +117,6 @@ namespace mongo {
             }
             return md5.digest();
         }
-
-
 
         Status StopWordsLoader::load() {
             Status status = _load();
