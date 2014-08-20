@@ -377,6 +377,9 @@ namespace mongo {
             else if ( !spec["weights"].eoo() ) {
                 uasserted( 17284, "text index option 'weights' must be an object" );
             }
+            else if ( !spec["stopWordListsDigest"].eoo() ) {
+                uasserted( 18646, "stopWordListsDigest cannot be set by user" );
+            }
 
             BSONObj weights;
             {
@@ -435,7 +438,10 @@ namespace mongo {
             }
 
             int version = -1;
-            int textIndexVersion = TEXT_INDEX_VERSION_2;
+            int textIndexVersion = StopWordsLoader::getLoader()
+                ->userConfigurableStopWordsEnabled() ? 
+                TEXT_INDEX_VERSION_3 :
+                TEXT_INDEX_VERSION_2;
 
             BSONObjBuilder b;
             BSONObjIterator i( spec );
@@ -466,7 +472,8 @@ namespace mongo {
                     textIndexVersion = e.numberInt();
                     uassert( 16730,
                              str::stream() << "bad textIndexVersion: " << textIndexVersion,
-                             textIndexVersion == TEXT_INDEX_VERSION_2 );
+                             (textIndexVersion == TEXT_INDEX_VERSION_2) ||
+                             (textIndexVersion == TEXT_INDEX_VERSION_3) );
                 }
                 else {
                     b.append( e );
@@ -486,6 +493,7 @@ namespace mongo {
                 b.append( "v", version );
             }
             b.append( "textIndexVersion", textIndexVersion );
+            b.append( "stopWordListsDigest", StopWordsLoader::getLoader()->getStopWordListsDigest() );
 
             return b.obj();
         }

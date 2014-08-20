@@ -45,7 +45,6 @@ namespace mongo {
         class FTSLanguage;
 
         void enableUserConfigurableStopWords( const std::map<std::string, std::string>& paths );
-        //const bool userConfigurableStopWordsEnabled();
 
         // Represents stop words for a particular language
         class StopWords {
@@ -76,13 +75,15 @@ namespace mongo {
 
             Status load();
 
+            virtual const bool userConfigurableStopWordsEnabled() { return false; }
+
             // These can be called concurrently as they are read-only
             const StopWords* const getStopWords(const FTSLanguage& language) const;
             const StringMap<StopWords*>& getStopWords() const { return _stopWords; }
 
             // Instance is set during static initialization
             static StopWordsLoader* getLoader();
-            // For testing, returns original loader
+            // For testing, return value is original loader
             static StopWordsLoader* setLoader(StopWordsLoader* loader);
 
             const std::string& getStopWordListsDigest() const;
@@ -102,6 +103,7 @@ namespace mongo {
                 : _stopWordLists(stopWordLists)
             {}
             virtual ~UserConfigurableStopWordsLoader() {}
+            virtual const bool userConfigurableStopWordsEnabled() { return true; }
         protected:
             virtual Status _load();
             // Paths to user configured stop words
