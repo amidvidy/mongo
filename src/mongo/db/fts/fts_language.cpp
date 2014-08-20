@@ -191,6 +191,7 @@ namespace mongo {
             verify( !languageName.empty() );
             language->_canonicalName = languageName.toString();
             switch ( textIndexVersion ) {
+            case TEXT_INDEX_VERSION_3:  // intentional fallthrough
             case TEXT_INDEX_VERSION_2:
                 verify( languageMapV2.find( languageName ) == languageMapV2.end() );
                 languageMapV2[ languageName ] = language;
@@ -208,6 +209,7 @@ namespace mongo {
                                                  const StringData& alias,
                                                  TextIndexVersion textIndexVersion ) {
             switch ( textIndexVersion ) {
+            case TEXT_INDEX_VERSION_3: // intentional fallthrough
             case TEXT_INDEX_VERSION_2:
                 verify( languageMapV2.find( alias ) == languageMapV2.end() );
                 languageMapV2[ alias ] = language;
@@ -232,6 +234,7 @@ namespace mongo {
         StatusWithFTSLanguage FTSLanguage::make( const StringData& langName,
                                                  TextIndexVersion textIndexVersion ) {
             switch ( textIndexVersion ) {
+                case TEXT_INDEX_VERSION_3: // intentional fallthrough
                 case TEXT_INDEX_VERSION_2: {
                     LanguageMapV2::const_iterator it = languageMapV2.find( langName );
                     if ( it == languageMapV2.end() ) {
