@@ -67,7 +67,13 @@ namespace mongo {
             return true;
         }
 
-    } getStopWordsCommand;
-    
+    };
+        // Need to wait until after the StopWordsLoader is created
+    MONGO_INITIALIZER_WITH_PREREQUISITES(RegisterGetStopWordsCommand, ("LoadStopWords"))
+        (InitializerContext* context) {
+            // Intentionally leaked, commands register themselves
+        new GetStopWordsCommand();
+    }
+
     }
 }
