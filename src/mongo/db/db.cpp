@@ -434,10 +434,15 @@ namespace mongo {
                 
                 log() << "\t" << *i << endl;
             }
-            dbexit( EXIT_BADOPTIONS );
-        }
 
-        wunit.commit();
+            if ( !serverGlobalParams.ignoreMismatchedStopWords ) {
+                dbexit( EXIT_BADOPTIONS );
+            }
+            warning() << "Server is configured to ignore mismatched stop words. Do not run this "
+                      << "configuration in production." << endl;
+            warning() << "Drop any inconsistent FTS indexes and restart the server normally to "
+                      << "avoid undefined behavior. " << endl;
+        }
 
         LOG(1) << "done repairDatabases" << endl;
     }

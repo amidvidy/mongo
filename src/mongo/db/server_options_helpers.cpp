@@ -115,7 +115,7 @@ namespace {
         portInfoBuilder << "specify port number - " << ServerGlobalParams::DefaultDBPort << " by default";
         maxConnInfoBuilder << "max number of simultaneous connections - "
                            << DEFAULT_MAX_CONN << " by default";
-        unixSockPermsBuilder << "permissions to set on UNIX domain socket file - " 
+        unixSockPermsBuilder << "permissions to set on UNIX domain socket file - "
                              << DEFAULT_UNIX_PERMS << " by default";
 
         options->addOptionChaining("help", "help,h", moe::Switch, "show this usage information")
@@ -273,7 +273,7 @@ namespace {
         options->addOptionChaining("net.unixDomainSocket.pathPrefix", "unixSocketPrefix",
                 moe::String, "alternative directory for UNIX domain sockets (defaults to /tmp)");
 
-        options->addOptionChaining("net.unixDomainSocket.filePermissions", "filePermissions", 
+        options->addOptionChaining("net.unixDomainSocket.filePermissions", "filePermissions",
                 moe::Int, unixSockPermsBuilder.str().c_str() );
 
         options->addOptionChaining("processManagement.fork", "fork", moe::Switch,
@@ -330,6 +330,13 @@ namespace {
 
         options->addOptionChaining("textSearch.stopWordLists", "textSearchStopWordLists",
                                    moe::StringMap, "Override language specific stop word lists");
+
+        options->addOptionChaining("textSearch.ignoreMismatchedStopWords",
+                                   "ignoreMismatchedStopWords",
+                                   moe::Bool,
+                                   "Ignore mismatched stop word lists instead of shutting down")
+            .setImplicit(moe::Value(true));
+
 
         return Status::OK();
     }
@@ -774,7 +781,7 @@ namespace {
             serverGlobalParams.noUnixSocket = !params["net.unixDomainSocket.enabled"].as<bool>();
         }
         if (params.count("net.unixDomainSocket.filePermissions")) {
-            serverGlobalParams.unixSocketPermissions = 
+            serverGlobalParams.unixSocketPermissions =
                 params["net.unixDomainSocket.filePermissions"].as<int>();
         }
 
@@ -954,6 +961,10 @@ namespace {
                 params["textSearch.stopWordLists"].as<std::map<std::string, std::string> >();
 
             fts::enableUserConfigurableStopWords(stopWordLists);
+        }
+
+        if (params.count("textSearch.ignoreMismatchedStopWords")) {
+            serverGlobalParams.ignoreMismatchedStopWords = true;
         }
 
         return Status::OK();

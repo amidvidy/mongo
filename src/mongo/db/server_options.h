@@ -43,7 +43,7 @@ namespace mongo {
             slowMS(100), defaultLocalThresholdMillis(15), moveParanoia(true),
             noUnixSocket(false), doFork(0), socket("/tmp"), maxConns(DEFAULT_MAX_CONN), 
             unixSocketPermissions(DEFAULT_UNIX_PERMS), logAppend(false), logRenameOnRotate(true),
-            logWithSyslog(false), isHttpInterfaceEnabled(false)
+            logWithSyslog(false), isHttpInterfaceEnabled(false), ignoreMismatchedStopWords(false)
         {
             started = time(0);
         }
@@ -96,6 +96,8 @@ namespace mongo {
         int syslogFacility;    // Facility used when appending messages to the syslog.
 
         bool isHttpInterfaceEnabled; // True if the dbwebserver should be enabled.
+
+        bool ignoreMismatchedStopWords; // startup irregardless of whether stop words are mismatched
 
 #ifndef _WIN32
         ProcessId parentProc;      // --fork pid of initial process
