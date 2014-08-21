@@ -502,5 +502,22 @@ namespace mongo {
             return b.obj();
         }
 
+        //  static
+        bool FTSSpec::validateStopWords( const BSONObj& spec ) {
+            invariant( !spec["textIndexVersion"].eoo() );
+            invariant( spec["textIndexVersion"].isNumber() );
+            if ( spec["textIndexVersion"].numberInt() != TEXT_INDEX_VERSION_3 ) {
+                // Stopwords before version 3 are not checked
+                return true;
+            }
+
+            invariant( !spec["stopWordListsDigest"].eoo() );
+            invariant( String == spec["stopWordListsDigest"].type() );
+
+            return StopWordsLoader::getLoader()
+                ->getStopWordListsDigest() 
+                == spec["stopWordListsDigest"].str();
+        }
+
     }
 }

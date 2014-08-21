@@ -56,6 +56,7 @@
 #include "mongo/db/db.h"
 #include "mongo/db/dbmessage.h"
 #include "mongo/db/dbwebserver.h"
+#include "mongo/db/fts/fts_spec.h"
 #include "mongo/db/global_environment_d.h"
 #include "mongo/db/global_environment_experiment.h"
 #include "mongo/db/index_names.h"
@@ -387,6 +388,12 @@ namespace mongo {
                               << startupWarningsLog;
                     }
 
+                    if (INDEX_TEXT == IndexNames::nameToType(plugin)) {
+                        // TODO: option to ignore, and better error message
+                        // Also need to print all mismatches, not just the first
+                        fassert(18647, fts::FTSSpec::validateStopWords(index));
+                    }
+                    
                     const Status keyStatus = validateKeyPattern(key);
                     if (!keyStatus.isOK()) {
                         log() << "Problem with index " << index << ": " << keyStatus.reason()

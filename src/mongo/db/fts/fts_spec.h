@@ -110,6 +110,8 @@ namespace mongo {
              */
             TextIndexVersion getTextIndexVersion() const { return _textIndexVersion; }
 
+            static bool validateStopWords( const BSONObj& spec );
+
         private:
             //
             // Helper methods.  Invoked for TEXT_INDEX_VERSION_2 spec objects only.
