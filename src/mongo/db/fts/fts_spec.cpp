@@ -74,16 +74,20 @@ namespace mongo {
                      textIndexVersionElt.isNumber() );
 
             // We currently support TEXT_INDEX_VERSION_1 (deprecated) and TEXT_INDEX_VERSION_2.
+            // TEXT_INDEX_VERSION_3 is experimental. (user configurable stop words)
             // Reject all other values.
             massert( 17364,
-                     str::stream() << "attempt to use unsupported textIndexVersion " <<
-                         textIndexVersionElt.numberInt() << "; versions supported: " <<
-                         TEXT_INDEX_VERSION_2 << ", " << TEXT_INDEX_VERSION_1,
-                     textIndexVersionElt.numberInt() == TEXT_INDEX_VERSION_2 ||
-                         textIndexVersionElt.numberInt() == TEXT_INDEX_VERSION_1 );
+                     str::stream() << "attempt to use unsupported textIndexVersion "
+                                   << textIndexVersionElt.numberInt() << "; versions supported: "
+                                   << TEXT_INDEX_VERSION_1 << ", "
+                                   << TEXT_INDEX_VERSION_2 << ", "
+                                   << TEXT_INDEX_VERSION_3,
+                     ( textIndexVersionElt.numberInt() == TEXT_INDEX_VERSION_1 ||
+                       textIndexVersionElt.numberInt() == TEXT_INDEX_VERSION_2 ||
+                       textIndexVersionElt.numberInt() == TEXT_INDEX_VERSION_3 )
+                     );
 
-            _textIndexVersion = ( textIndexVersionElt.numberInt() == TEXT_INDEX_VERSION_2 ) ?
-                                TEXT_INDEX_VERSION_2 : TEXT_INDEX_VERSION_1;
+            _textIndexVersion = static_cast<TextIndexVersion>(textIndexVersionElt.numberInt());
 
             // Initialize _defaultLanguage.  Note that the FTSLanguage constructor requires
             // textIndexVersion, since language parsing is version-specific.
@@ -439,7 +443,7 @@ namespace mongo {
 
             int version = -1;
             int textIndexVersion = StopWordsLoader::getLoader()
-                ->userConfigurableStopWordsEnabled() ? 
+                ->userConfigurableStopWordsEnabled() ?
                 TEXT_INDEX_VERSION_3 :
                 TEXT_INDEX_VERSION_2;
 
