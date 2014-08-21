@@ -382,7 +382,7 @@ namespace mongo {
                 uasserted( 17284, "text index option 'weights' must be an object" );
             }
             else if ( !spec["stopWordListsDigest"].eoo() ) {
-                uasserted( 18646, "stopWordListsDigest cannot be set by user" );
+                uasserted( 18653, "stopWordListsDigest cannot be set by user" );
             }
 
             BSONObj weights;
