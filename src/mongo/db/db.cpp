@@ -339,6 +339,9 @@ namespace mongo {
         StorageEngine* storageEngine = getGlobalEnvironment()->getGlobalStorageEngine();
         storageEngine->listDatabases( &dbNames );
 
+        // This could use a refactor
+        vector< std::string > badFTSIndexes;
+
         for ( vector< string >::iterator i = dbNames.begin(); i != dbNames.end(); ++i ) {
             string dbName = *i;
             LOG(1) << "\t" << dbName << endl;
@@ -391,7 +394,11 @@ namespace mongo {
                     if (INDEX_TEXT == IndexNames::nameToType(plugin)) {
                         // TODO: option to ignore, and better error message
                         // Also need to print all mismatches, not just the first
-                        fassert(18647, fts::FTSSpec::validateStopWords(index));
+                        if ( !fts::FTSSpec::validateStopWords(index) ) {
+                            badFTSIndexes.push_back(str::stream() << index["name"].str()
+                                                                  << " on "
+                                                                  << index["ns"].str());
+                        }
                     }
                     
                     const Status keyStatus = validateKeyPattern(key);
@@ -411,6 +418,26 @@ namespace mongo {
                 dbHolder().close( &txn, dbName );
             }
         }
+        
+        if ( badFTSIndexes.size() > 0 ) {
+            // TODO: change config option to actual option
+            log() << "Text indexes exist on disk that were created with different stop words than "
+                  << "those currently loaded by the server. " << startupWarningsLog; 
+            log() << "The server will shutdown if this "
+                  << "misconfiguration is detected, unless the --ignoreMismatchedStopWords option "
+                  << "is passed to the server at startup." << startupWarningsLog;
+            log() << "These text indexes have mismatched stop words: " << startupWarningsLog;
+            
+            for ( std::vector< std::string >::const_iterator i = badFTSIndexes.begin();
+                  i != badFTSIndexes.end();
+                  ++i ) {
+                
+                log() << "\t" << *i << endl;
+            }
+            dbexit( EXIT_BADOPTIONS );
+        }
+
+        wunit.commit();
 
         LOG(1) << "done repairDatabases" << endl;
     }
