@@ -235,7 +235,8 @@ env.Library( 'mongohasher', [ "db/hasher.cpp" ] )
 
 env.Library('synchronization', [ 'util/concurrency/synchronization.cpp' ])
 
-env.Library('auth_helpers', ['client/auth_helpers.cpp'])
+env.Library('auth_helpers', ['client/auth_helpers.cpp'],
+            LIBDEPS=['clientdriver'])
 
 env.Library('global_optime', ['db/global_optime.cpp'])
 
@@ -291,8 +292,7 @@ env.Library('clientdriver', [
             "client/syncclusterconnection.cpp",
             "db/dbmessage.cpp"
             ],
-            LIBDEPS=['auth_helpers',
-                     'network',
+            LIBDEPS=['network',
             ])
 
 env.CppUnitTest("replica_set_monitor_test",
@@ -925,6 +925,7 @@ serveronlyLibdeps = ["coreshard",
                      "db/repl/topology_coordinator_impl",
                      "db/repl/repl_coordinator_global",
                      "db/repl/replication_executor",
+                     "db/repl/rslog",
                      'db/storage/mmap_v1/storage_mmapv1',
                      'db/storage/heap1/storage_heap1',
                      '$BUILD_DIR/third_party/shim_snappy']

@@ -237,7 +237,7 @@ namespace mongo {
     static void logStartup() {
         BSONObjBuilder toLog;
         stringstream id;
-        id << getHostNameCached() << "-" << jsTime();
+        id << getHostNameCached() << "-" << jsTime().asInt64();
         toLog.append( "_id", id.str() );
         toLog.append( "hostname", getHostNameCached() );
 
@@ -332,7 +332,6 @@ namespace mongo {
 
         OperationContextImpl txn;
         Lock::GlobalWrite lk(txn.lockState());
-        WriteUnitOfWork wunit(&txn);
 
         vector< string > dbNames;
 
@@ -405,7 +404,6 @@ namespace mongo {
                 dbHolder().close( &txn, dbName );
             }
         }
-        wunit.commit();
 
         LOG(1) << "done repairDatabases" << endl;
     }

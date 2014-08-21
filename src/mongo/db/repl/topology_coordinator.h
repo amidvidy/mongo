@@ -48,6 +48,7 @@ namespace repl {
     class MemberHeartbeatData;
     struct MemberState;
     class ReplicaSetConfig;
+    class ReplSetHeartbeatArgs;
     class TagSubgroup;
 
     /**
@@ -63,10 +64,6 @@ namespace repl {
 
         virtual ~TopologyCoordinator() {}
         
-        // The optime of the last op marked as committed by the leader
-        virtual void setCommitOkayThrough(const OpTime& optime) = 0;
-        // The optime of the last op received over the network from the sync source
-        virtual void setLastReceived(const OpTime& optime) = 0;
         // The index into the config used when we next choose a sync source
         virtual void setForceSyncSourceIndex(int index) = 0;
 
@@ -91,12 +88,19 @@ namespace repl {
         // Applier calls this to notify that it's now safe to transition from SECONDARY to PRIMARY
         virtual void signalDrainComplete() = 0;
 
-        // produce a reply to a RAFT-style RequestVote RPC
-        virtual void prepareRequestVoteResponse(const Date_t now,
-                                                const BSONObj& cmdObj,
-                                                const OpTime& lastOpApplied,
-                                                std::string& errmsg, 
-                                                BSONObjBuilder& result) = 0; 
+        // produces a reply to a replSetSyncFrom command
+        virtual void prepareSyncFromResponse(const ReplicationExecutor::CallbackData& data,
+                                             const HostAndPort& target,
+                                             const OpTime& lastOpApplied,
+                                             BSONObjBuilder* response,
+                                             Status* result) = 0;
+
+        // produce a reply to a replSetFresh command
+        virtual void prepareFreshResponse(const ReplicationExecutor::CallbackData& data,
+                                          const ReplicationCoordinator::ReplSetFreshArgs& args,
+                                          const OpTime& lastOpApplied,
+                                          BSONObjBuilder* response,
+                                          Status* result) = 0;
 
         // produce a reply to a received electCmd
         virtual void prepareElectCmdResponse(const Date_t now,

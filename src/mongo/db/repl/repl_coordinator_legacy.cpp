@@ -52,6 +52,7 @@
 #include "mongo/db/repl/rs.h"
 #include "mongo/db/repl/rs_config.h"
 #include "mongo/db/repl/rs_initiate.h"
+#include "mongo/db/repl/rslog.h"
 #include "mongo/db/repl/update_position_args.h"
 #include "mongo/db/repl/write_concern.h"
 #include "mongo/db/write_concern_options.h"
@@ -948,11 +949,11 @@ namespace {
         return Status::OK();
     }
 
-    Status LegacyReplicationCoordinator::processReplSetSyncFrom(const std::string& target,
+    Status LegacyReplicationCoordinator::processReplSetSyncFrom(const HostAndPort& target,
                                                                 BSONObjBuilder* resultObj) {
-        resultObj->append("syncFromRequested", target);
+        resultObj->append("syncFromRequested", target.toString());
 
-        return theReplSet->forceSyncFrom(target, resultObj);
+        return theReplSet->forceSyncFrom(target.toString(), resultObj);
     }
 
     Status LegacyReplicationCoordinator::processReplSetUpdatePosition(

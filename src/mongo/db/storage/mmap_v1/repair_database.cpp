@@ -314,16 +314,17 @@ namespace mongo {
             scoped_ptr<MMAPV1DatabaseCatalogEntry> dbEntry;
             scoped_ptr<Database> tempDatabase;
             {
-                dbEntry.reset( new MMAPV1DatabaseCatalogEntry( txn,
-                                                               dbName,
-                                                               reservedPathString,
-                                                               storageGlobalParams.directoryperdb,
-                                                               true ) );
-                invariant( !dbEntry->exists() );
-                tempDatabase.reset( new Database( txn,
-                                                  dbName,
-                                                  dbEntry.get() ) );
-
+                WriteUnitOfWork wunit(txn);
+                dbEntry.reset(new MMAPV1DatabaseCatalogEntry(txn,
+                                                             dbName,
+                                                             reservedPathString,
+                                                             storageGlobalParams.directoryperdb,
+                                                             true));
+                invariant(!dbEntry->exists());
+                tempDatabase.reset( new Database(txn,
+                                                 dbName,
+                                                 dbEntry.get()));
+                wunit.commit();
             }
 
             map<string,CollectionOptions> namespacesToCopy;
@@ -372,7 +373,6 @@ namespace mongo {
 
                 Collection* tempCollection = NULL;
                 {
-                    Client::Context tempContext(txn, ns, tempDatabase );
                     WriteUnitOfWork wunit(txn);
                     tempCollection = tempDatabase->createCollection(txn, ns, options, true, false);
                     wunit.commit();
@@ -395,7 +395,6 @@ namespace mongo {
                         indexes.push_back( desc->infoObj() );
                     }
 
-                    Client::Context tempContext(txn, ns, tempDatabase);
                     Status status = indexer.init( indexes );
                     if ( !status.isOK() )
                         return status;
@@ -410,8 +409,6 @@ namespace mongo {
 
                     BSONObj doc = originalCollection->docFor( loc );
 
-                    Client::Context tempContext(txn, ns, tempDatabase);
-                    
                     WriteUnitOfWork wunit(txn);
                     StatusWith<DiskLoc> result = tempCollection->insertDocument(txn,
                                                                                 doc,
@@ -429,7 +426,6 @@ namespace mongo {
                     return status;
 
                 {
-                    Client::Context tempContext(txn, ns, tempDatabase);
                     WriteUnitOfWork wunit(txn);
                     indexer.commit();
                     wunit.commit();

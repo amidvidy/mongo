@@ -121,10 +121,11 @@ namespace mongo {
             // TODO A write lock is currently taken here to accommodate stages that perform writes
             //      (e.g. DeleteStage).  This should be changed to use a read lock for read-only
             //      execution trees.
-            Client::WriteContext ctx(txn, dbname);
+            Lock::DBWrite lk(txn->lockState(), dbname);
+            Client::Context ctx(txn, dbname);
 
             // Make sure the collection is valid.
-            Database* db = ctx.ctx().db();
+            Database* db = ctx.db();
             Collection* collection = db->getCollection(txn, db->name() + '.' + collName);
             uassert(17446, "Couldn't find the collection " + collName, NULL != collection);
 
@@ -408,7 +409,8 @@ namespace mongo {
                 params.spec = fam->getSpec();
 
                 if (!params.query.parse(search,
-                                        fam->getSpec().defaultLanguage().str().c_str()).isOK()) {
+                                        fam->getSpec().defaultLanguage().str().c_str(),
+                                        fam->getSpec().getTextIndexVersion()).isOK()) {
                     return NULL;
                 }
 

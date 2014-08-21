@@ -47,6 +47,7 @@
 #include "mongo/db/repl/oplog.h"
 #include "mongo/db/repl/oplogreader.h"
 #include "mongo/db/repl/repl_coordinator_global.h"
+#include "mongo/db/repl/rslog.h"
 #include "mongo/util/log.h"
 #include "mongo/util/mongoutils/str.h"
 
@@ -121,7 +122,6 @@ namespace repl {
 
             // Make database stable
             Lock::DBWrite dbWrite(txn->lockState(), db);
-            WriteUnitOfWork wunit(txn);
 
             if (!cloner.go(txn, db, master, options, NULL, err, &errCode)) {
                 sethbmsg(str::stream() << "initial sync: error while "
@@ -130,7 +130,6 @@ namespace repl {
                                        << "sleeping 5 minutes" ,0);
                 return false;
             }
-            wunit.commit();
         }
 
         return true;

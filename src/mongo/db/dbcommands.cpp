@@ -120,7 +120,7 @@ namespace mongo {
 
         writelocktry wlt(txn->lockState(), 2 * 60 * 1000);
         uassert( 13455 , "dbexit timed out getting lock" , wlt.got() );
-        return shutdownHelper();
+        return shutdownHelper(txn);
     }
 
     class CmdDropDatabase : public Command {
@@ -386,6 +386,10 @@ namespace mongo {
         }
 
         bool run(OperationContext* txn, const string& dbname , BSONObj& cmdObj, int, string& errmsg, BSONObjBuilder& result, bool) {
+            const char* deprecationWarning = 
+                "CMD diagLogging is deprecated and will be removed in a future release";
+            warning() << deprecationWarning << startupWarningsLog;
+
             // This doesn't look like it requires exclusive DB lock, because it uses its own diag
             // locking, but originally the lock was set to be WRITE, so preserving the behaviour.
             //
@@ -398,6 +402,7 @@ namespace mongo {
                 LOG(0) << "CMD: diagLogging set to " << _diaglog.getLevel() << " from: " << was << endl;
             }
             result.append( "was" , was );
+            result.append( "note", deprecationWarning );
             return true;
         }
     } cmddiaglogging;

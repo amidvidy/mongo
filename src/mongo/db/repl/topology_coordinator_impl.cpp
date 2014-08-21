@@ -39,6 +39,7 @@
 #include "mongo/db/repl/repl_set_heartbeat_args.h"
 #include "mongo/db/repl/repl_set_heartbeat_response.h"
 #include "mongo/db/repl/replication_executor.h"
+#include "mongo/db/repl/rslog.h"
 #include "mongo/db/server_parameters.h"
 #include "mongo/util/log.h"
 #include "mongo/util/mongoutils/str.h"
@@ -67,14 +68,6 @@ namespace repl {
         _blockSync(false),
         _maintenanceModeCalls(0)
     {
-    }
-
-    void TopologyCoordinatorImpl::setCommitOkayThrough(const OpTime& optime) {
-        _commitOkayThrough = optime;
-    }
-
-    void TopologyCoordinatorImpl::setLastReceived(const OpTime& optime) {
-        _lastReceived = optime;
     }
 
     void TopologyCoordinatorImpl::setForceSyncSourceIndex(int index) {
@@ -283,72 +276,161 @@ namespace repl {
 */
     }
 
-    // Produce a reply to a RAFT-style RequestVote RPC; this is MongoDB ReplSetFresh command
-    // The caller should validate that the message is for the correct set, and has the required data
-    void TopologyCoordinatorImpl::prepareRequestVoteResponse(const Date_t now,
-                                                             const BSONObj& cmdObj,
-                                                             const OpTime& lastOpApplied,
-                                                             std::string& errmsg,
-                                                             BSONObjBuilder& result) {
+    void TopologyCoordinatorImpl::prepareSyncFromResponse(
+            const ReplicationExecutor::CallbackData& data,
+            const HostAndPort& target,
+            const OpTime& lastOpApplied,
+            BSONObjBuilder* response,
+            Status* result) {
+        if (data.status == ErrorCodes::CallbackCanceled) {
+            *result = Status(ErrorCodes::ShutdownInProgress, "replication system is shutting down");
+            return;
+        }
 
-        string who = cmdObj["who"].String();
-        int cfgver = cmdObj["cfgver"].Int();
-        OpTime opTime(cmdObj["opTime"].Date());
+        response->append("syncFromRequested", target.toString());
+
+        const MemberConfig& selfConfig = _selfConfig();
+        if (selfConfig.isArbiter()) {
+            *result = Status(ErrorCodes::NotSecondary, "arbiters don't sync");
+            return;
+        }
+        if (_selfIndex == _currentPrimaryIndex) {
+            *result = Status(ErrorCodes::NotSecondary, "primaries don't sync");
+            return;
+        }
+
+        ReplicaSetConfig::MemberIterator targetConfig = _currentConfig.membersEnd();
+        int targetIndex = 0;
+        for (ReplicaSetConfig::MemberIterator it = _currentConfig.membersBegin();
+                it != _currentConfig.membersEnd(); ++it) {
+            if (it->getHostAndPort() == target) {
+                targetConfig = it;
+                break;
+            }
+            ++targetIndex;
+        }
+        if (targetConfig == _currentConfig.membersEnd()) {
+            *result = Status(ErrorCodes::NodeNotFound,
+                             str::stream() << "Could not find member \"" << target.toString() <<
+                                     "\" in replica set");
+            return;
+        }
+        if (targetIndex == _selfIndex) {
+            *result = Status(ErrorCodes::InvalidOptions, "I cannot sync from myself");
+            return;
+        }
+        if (targetConfig->isArbiter()) {
+            *result = Status(ErrorCodes::InvalidOptions,
+                             str::stream() << "Cannot sync from \"" << target.toString() <<
+                                     "\" because it is an arbiter");
+            return;
+        }
+        if (!targetConfig->shouldBuildIndexes() && selfConfig.shouldBuildIndexes()) {
+            *result = Status(ErrorCodes::InvalidOptions,
+                             str::stream() << "Cannot sync from \"" << target.toString() <<
+                                     "\" because it does not build indexes");
+            return;
+        }
+
+        const MemberHeartbeatData& hbdata = _hbdata[targetIndex];
+        if (hbdata.hasAuthIssue()) {
+            *result = Status(ErrorCodes::Unauthorized,
+                             str::stream() << "not authorized to communicate with " <<
+                                     target.toString());
+            return;
+        }
+        if (hbdata.getHealth() == 0) {
+            *result = Status(ErrorCodes::HostUnreachable,
+                             str::stream() << "I cannot reach the requested member: " <<
+                                     target.toString());
+            return;
+        }
+        if (hbdata.getOpTime().getSecs()+10 < lastOpApplied.getSecs()) {
+            warning() << "attempting to sync from " << target
+                      << ", but its latest opTime is " << hbdata.getOpTime().getSecs()
+                      << " and ours is " << lastOpApplied.getSecs() << " so this may not work"
+                      << rsLog;
+            response->append("warning",
+                             str::stream() << "requested member \"" << target.toString() <<
+                                     "\" is more than 10 seconds behind us");
+            // not returning bad Status, just warning
+        }
+
+        HostAndPort prevSyncSource = getSyncSourceAddress();
+        if (!prevSyncSource.empty()) {
+            response->append("prevSyncTarget", prevSyncSource.toString());
+        }
+
+        setForceSyncSourceIndex(targetIndex);
+        *result = Status::OK();
+    }
+
+    void TopologyCoordinatorImpl::prepareFreshResponse(
+            const ReplicationExecutor::CallbackData& data,
+            const ReplicationCoordinator::ReplSetFreshArgs& args,
+            const OpTime& lastOpApplied,
+            BSONObjBuilder* response,
+            Status* result) {
+
+        if (args.setName != _currentConfig.getReplSetName()) {
+            *result = Status(ErrorCodes::ReplicaSetNotFound,
+                             str::stream() << "Wrong repl set name. Expected: " <<
+                                     _currentConfig.getReplSetName() <<
+                                     ", received: " << args.setName);
+            return;
+        }
 
         bool weAreFresher = false;
-        if( _currentConfig.getConfigVersion() > cfgver ) {
-            log() << "replSet member " << who << " is not yet aware its cfg version "
-                  << cfgver << " is stale";
-            result.append("info", "config version stale");
+        if( _currentConfig.getConfigVersion() > args.cfgver ) {
+            log() << "replSet member " << args.who << " is not yet aware its cfg version "
+                  << args.cfgver << " is stale";
+            response->append("info", "config version stale");
             weAreFresher = true;
         }
         // check not only our own optime, but any other member we can reach
-        else if( opTime < _commitOkayThrough ||
-                 opTime < _latestKnownOpTime())  {
+        else if( args.opTime < lastOpApplied ||
+                 args.opTime < _latestKnownOpTime())  {
             weAreFresher = true;
         }
-        result.appendDate("opTime", lastOpApplied.asDate());
-        result.append("fresher", weAreFresher);
+        response->appendDate("opTime", lastOpApplied.asDate());
+        response->append("fresher", weAreFresher);
 
-        bool doVeto = _shouldVeto(cmdObj, errmsg);
-        result.append("veto",doVeto);
+        std::string errmsg;
+        bool doVeto = _shouldVetoMember(args.id, lastOpApplied, &errmsg);
+        response->append("veto", doVeto);
         if (doVeto) {
-            result.append("errmsg", errmsg);
+            response->append("errmsg", errmsg);
         }
+        *result = Status::OK();
     }
 
-    bool TopologyCoordinatorImpl::_shouldVeto(const BSONObj& cmdObj, string& errmsg) const {
-        // don't veto older versions
-        if (cmdObj["id"].eoo()) {
-            // they won't be looking for the veto field
-            return false;
-        }
-
-        const int id = cmdObj["id"].Int();
-        const int hopefulIndex = _getMemberIndex(id);
+    bool TopologyCoordinatorImpl::_shouldVetoMember(unsigned int memberID,
+                                                    const OpTime& lastOpApplied,
+                                                    std::string* errmsg) const {
+        const int hopefulIndex = _getMemberIndex(memberID);
         const int highestPriorityIndex = _getHighestPriorityElectableIndex();
 
         if (hopefulIndex == -1) {
-            errmsg = str::stream() << "replSet couldn't find member with id " << id;
+            *errmsg = str::stream() << "replSet couldn't find member with id " << memberID;
             return true;
         }
 
-        if ((_currentPrimaryIndex != -1) && 
-            (_commitOkayThrough >= _hbdata[hopefulIndex].getOpTime())) {
-            // hbinfo is not updated, so we have to check the primary's last optime separately
-            errmsg = str::stream() << "I am already primary, " << 
+        if ((_currentPrimaryIndex == _selfIndex) &&
+            (lastOpApplied >= _hbdata[hopefulIndex].getOpTime())) {
+            // hbinfo is not updated for ourself, so if we are primary we have to check the
+            // primary's last optime separately
+            *errmsg = str::stream() << "I am already primary, " <<
                 _currentConfig.getMemberAt(hopefulIndex).getHostAndPort().toString() << 
                 " can try again once I've stepped down";
             return true;
         }
 
         if (_currentPrimaryIndex != -1 &&
-            (_currentConfig.getMemberAt(hopefulIndex).getId() != 
-             _currentConfig.getMemberAt(_currentPrimaryIndex).getId()) &&
-            (_hbdata[_currentPrimaryIndex].getOpTime() >= 
-             _hbdata[hopefulIndex].getOpTime())) {
+                (hopefulIndex != _currentPrimaryIndex) &&
+                (_hbdata[_currentPrimaryIndex].getOpTime() >=
+                        _hbdata[hopefulIndex].getOpTime())) {
             // other members might be aware of more up-to-date nodes
-            errmsg = str::stream() << 
+            *errmsg = str::stream() <<
                 _currentConfig.getMemberAt(hopefulIndex).getHostAndPort().toString() <<
                 " is trying to elect itself but " << 
                 _currentConfig.getMemberAt(_currentPrimaryIndex).getHostAndPort().toString() <<
@@ -359,15 +441,15 @@ namespace repl {
         if ((highestPriorityIndex != -1) &&
             _currentConfig.getMemberAt(highestPriorityIndex).getPriority() > 
             _currentConfig.getMemberAt(hopefulIndex).getPriority()) {
-            errmsg = str::stream() << 
+            *errmsg = str::stream() <<
                 _currentConfig.getMemberAt(hopefulIndex).getHostAndPort().toString() << 
                 " has lower priority than " << 
                 _currentConfig.getMemberAt(highestPriorityIndex).getHostAndPort().toString();
             return true;
         }
 
-        if (!_electableSet.count(id)) {
-            errmsg = str::stream() << "I don't think "
+        if (!_electableSet.count(memberID)) {
+            *errmsg = str::stream() << "I don't think "
                 << _currentConfig.getMemberAt(hopefulIndex).getHostAndPort().toString() <<
                 " is electable";
             return true;
@@ -923,10 +1005,14 @@ namespace repl {
         }
     }
 
+    void TopologyCoordinatorImpl::_setCurrentPrimaryForTest(int primaryIndex) {
+        _currentPrimaryIndex = primaryIndex;
+    }
+
     void TopologyCoordinatorImpl::prepareStatusResponse(
             const ReplicationExecutor::CallbackData& data,
             Date_t now,
-            unsigned uptime,
+            unsigned selfUptime,
             const OpTime& lastOpApplied,
             BSONObjBuilder* response,
             Status* result) {
@@ -950,7 +1036,7 @@ namespace repl {
                 bb.append("health", 1.0);
                 bb.append("state", static_cast<int>(myState.s));
                 bb.append("stateStr", myState.toString());
-                bb.append("uptime", uptime);
+                bb.append("uptime", selfUptime);
                 if (!_selfConfig().isArbiter()) {
                     bb.append("optime", lastOpApplied);
                     bb.appendDate("optimeDate", lastOpApplied.asDate());
