@@ -164,7 +164,7 @@ namespace mongo {
             }
 
             // post-increment
-            const_iterator operator++(int) { 
+            const_iterator operator++(int) {
                 const_iterator tmp = *this;
                 ++(*this);
                 return tmp;
@@ -180,8 +180,8 @@ namespace mongo {
             // SERVER-14960 Make UnorderedFastKeyTable::const_iterator STL-compliant
             typedef std::forward_iterator_tag iterator_category;
             typedef value_type value_type;
-            typedef value_type& reference;
-            typedef value_type* pointer;
+            typedef const value_type& reference;
+            typedef const value_type* pointer;
             typedef std::ptrdiff_t difference_type;
         private:
 
@@ -238,4 +238,3 @@ namespace mongo {
 }
 
 #include "mongo/util/unordered_fast_key_table_internal.h"
-
