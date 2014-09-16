@@ -27,27 +27,121 @@
  *    then also delete it in the license file.
  */
 
-#include "mongo/pch.h"
+#include "mongo/platform/basic.h"
+
+#include "mongo/bson/oid.h"
 
 #include <boost/functional/hash.hpp>
+#include <boost/scoped_ptr.hpp>
 
+#include "mongo/base/init.h"
+#include "mongo/bson/bsonobjbuilder.h"
 #include "mongo/platform/atomic_word.h"
+
 #include "mongo/platform/process_id.h"
 #include "mongo/platform/random.h"
-#include "mongo/bson/bsonobjbuilder.h"
-#include "mongo/bson/oid.h"
 
 #define verify MONGO_verify
 
-BOOST_STATIC_ASSERT( sizeof(mongo::OID) == mongo::OID::kOIDSize );
-BOOST_STATIC_ASSERT( sizeof(mongo::OID) == 12 );
-
 namespace mongo {
 
+    namespace {
+        boost::scoped_ptr<PseudoRandom> entropy;
+        boost::scoped_ptr<AtomicUInt64> counter;
+        
+        const std::size_t kTimestampOffset = 0;
+        const std::size_t kUniqueOffset = kTimestampOffset + OID::kTimestampSize;  // 4
+        const std::size_t kIncOffset = kUniqueOffset + OID::kUniqueSize;  // 9
+   }
+
+    // Set in initializer and regenMachineId()
+    OID::Unique OID::_machineUnique = OID::Unique();
+
+    // TODO: figure out prereqs... probably everything
+    MONGO_INITIALIZER(OIDEntropy)(InitializerContext* context) {
+        // We use a secureRandom to initialize the PRNG. According to Andy we can't use time as 
+        // a seed, so we use the OS's pool of secure entropy.
+        boost::scoped_ptr<SecureRandom> seedSrc(SecureRandom::create()); 
+        entropy.reset(new PseudoRandom(seedSrc->nextInt64()));
+        counter.reset(new AtomicUInt64(entropy->nextInt64()));
+
+        OID::regenMachineId();
+        return Status::OK();
+    }
+
+    // Specializations of ByteOrderConverter so we can use readBE/writeBE
+    namespace endian {
+        template<>
+        struct ByteOrderConverter<OID::Increment> {
+            inline static OID::Increment nativeToBig(OID::Increment i) {
+// TODO make cleaner with export macros
+#if MONGO_BYTE_ORDER == 1234  // little endian
+                std::swap(i._inc[0], i._inc[2]);
+#endif
+                return i;
+            }
+            
+            inline static OID::Increment bigToNative(OID::Increment i) {
+#if MONGO_BYTE_ORDER == 1234  // little endian
+                std::swap(i._inc[0], i._inc[2]);
+#endif
+                return i;
+            }
+        };
+    }
+
+    inline OID::Increment OID::Increment::nextIncrement() {
+        uint64_t nextCtr = counter->fetchAndAdd(1);
+        // We shift the lowest 3 bytes up to the highest position so we can
+        // avoid pointer arithmetic
+        nextCtr <<= sizeof(uint64_t) - OID::kIncrementSize;
+        
+        OID::Increment incr;
+        // Copy the last 3 bytes
+        std::memcpy(incr._inc, &nextCtr, kIncrementSize);
+        
+        return incr;
+    }
+
+    inline OID::Unique OID::Unique::genUnique() {
+        int64_t rand = entropy->nextInt64();
+        OID::Unique u;
+        std::memcpy(u._unique, &rand, OID::kUniqueSize);
+        return u;
+    }
+
+    void OID::setTimestamp(const OID::Timestamp timestamp) {
+        _view.writeBE(timestamp, kTimestampOffset);
+    }
+
+    void OID::setUnique(const OID::Unique unique) {
+        // Byte order doesn't matter here
+        _view.writeNative(unique, kUniqueOffset);
+    }
+
+    void OID::setIncrement(const OID::Increment inc) {
+        _view.writeBE(inc, kIncOffset);
+    }
+
+    OID::Timestamp OID::getTimestamp() const {
+        return _view.readBE<Timestamp>(kTimestampOffset);
+    }
+
+    OID::Unique OID::getUnique() const {
+        // Byte order doesn't matter here
+        return _view.readNative<Unique>(kUniqueOffset);
+    }
+
+    OID::Increment OID::getInc() const {
+        return _view.readBE<Increment>(kUniqueOffset);
+    }
+
     void OID::hash_combine(size_t &seed) const {
-        boost::hash_combine(seed, x);
-        boost::hash_combine(seed, y);
-        boost::hash_combine(seed, z);
+        uint32_t v;
+        for (int i = 0; i < kOIDSize; i += sizeof(uint32_t)) {
+            memcpy(&v, _data + i, sizeof(int32_t));
+            boost::hash_combine(seed, v);
+        }
     }
 
     size_t OID::Hasher::operator() (const OID& oid) const {
@@ -56,139 +150,49 @@ namespace mongo {
         return seed;
     }
 
-    // machine # before folding in the process id
-    OID::MachineAndPid OID::ourMachine;
-
-    ostream& operator<<( ostream &s, const OID &o ) {
+    std::ostream& operator<<( std::ostream &s, const OID &o ) {
         s << o.str();
         return s;
     }
 
-    void OID::foldInPid(OID::MachineAndPid& x) {
-        unsigned p = ProcessId::getCurrent().asUInt32();
-        x._pid ^= static_cast<unsigned short>(p);
-        // when the pid is greater than 16 bits, let the high bits modulate the machine id field.
-        unsigned short& rest = (unsigned short &) x._machineNumber[1];
-        rest ^= p >> 16;
-    }
-
-    OID::MachineAndPid OID::genMachineAndPid() {
-        BOOST_STATIC_ASSERT( sizeof(mongo::OID::MachineAndPid) == 5 );
-
-        // we only call this once per process
-        scoped_ptr<SecureRandom> sr( SecureRandom::create() );
-        int64_t n = sr->nextInt64();
-        OID::MachineAndPid x = ourMachine = reinterpret_cast<OID::MachineAndPid&>(n);
-        foldInPid(x);
-        return x;
-    }
-
-    // after folding in the process id
-    OID::MachineAndPid OID::ourMachineAndPid = OID::genMachineAndPid();
-
     void OID::regenMachineId() {
-        ourMachineAndPid = genMachineAndPid();
-    }
-
-    inline bool OID::MachineAndPid::operator!=(const OID::MachineAndPid& rhs) const {
-        return _pid != rhs._pid || _machineNumber != rhs._machineNumber;
+        _machineUnique = Unique::genUnique();
     }
 
     unsigned OID::getMachineId() {
-        unsigned char x[4];
-        x[0] = ourMachineAndPid._machineNumber[0];
-        x[1] = ourMachineAndPid._machineNumber[1];
-        x[2] = ourMachineAndPid._machineNumber[2];
-        x[3] = 0;
-        return (unsigned&) x[0];
+        uint32_t ret = 0;
+        std::memcpy(&ret, _machineUnique._unique, sizeof(uint32_t));
+        return ret;
     }
 
     void OID::justForked() {
-        MachineAndPid x = ourMachine;
-        // we let the random # for machine go into all 5 bytes of MachineAndPid, and then
-        // xor in the pid into _pid.  this reduces the probability of collisions.
-        foldInPid(x);
-        ourMachineAndPid = genMachineAndPid();
-        verify( x != ourMachineAndPid );
-        ourMachineAndPid = x;
+        regenMachineId();
     }
 
     void OID::init() {
-        static AtomicUInt32 inc(
-            static_cast<unsigned>(
-                scoped_ptr<SecureRandom>(SecureRandom::create())->nextInt64()));
-
-        {
-            unsigned t = (unsigned) time(0);
-            unsigned char *T = (unsigned char *) &t;
-            _time[0] = T[3]; // big endian order because we use memcmp() to compare OID's
-            _time[1] = T[2];
-            _time[2] = T[1];
-            _time[3] = T[0];
-        }
-
-        _machineAndPid = ourMachineAndPid;
-
-        {
-            int new_inc = inc.fetchAndAdd(1);
-            unsigned char *T = (unsigned char *) &new_inc;
-            _inc[0] = T[2];
-            _inc[1] = T[1];
-            _inc[2] = T[0];
-        }
-    }
-
-    static AtomicUInt64 _initSequential_sequence;
-    void OID::initSequential() {
-
-        {
-            unsigned t = (unsigned) time(0);
-            unsigned char *T = (unsigned char *) &t;
-            _time[0] = T[3]; // big endian order because we use memcmp() to compare OID's
-            _time[1] = T[2];
-            _time[2] = T[1];
-            _time[3] = T[0];
-        }
-        
-        {
-            unsigned long long nextNumber = _initSequential_sequence.fetchAndAdd(1);
-            unsigned char* numberData = reinterpret_cast<unsigned char*>(&nextNumber);
-            for ( int i=0; i<8; i++ ) {
-                data[4+i] = numberData[7-i];
-            }
-        }
+        // each set* method handles endianness
+        setTimestamp(time(0));
+        setUnique(_machineUnique);
+        setIncrement(Increment::nextIncrement());
     }
 
     void OID::init( const std::string& s ) {
         verify( s.size() == 24 );
         const char *p = s.c_str();
-        for( size_t i = 0; i < kOIDSize; i++ ) {
-            data[i] = fromHex(p);
+        for (std::size_t i = 0; i < kOIDSize; i++) {
+            _data[i] = fromHex(p);
             p += 2;
         }
     }
 
     void OID::init(Date_t date, bool max) {
-        int time = (int) (date / 1000);
-        char* T = (char *) &time;
-        data[0] = T[3];
-        data[1] = T[2];
-        data[2] = T[1];
-        data[3] = T[0];
-
-        if (max)
-            *(long long*)(data + 4) = 0xFFFFFFFFFFFFFFFFll;
-        else
-            *(long long*)(data + 4) = 0x0000000000000000ll;
+        setTimestamp(uint32_t(date / 1000));
+        uint64_t rest = max ? std::numeric_limits<uint64_t>::max() : 0u;
+        std::memcpy(_view.view(kUniqueOffset), &rest, kUniqueSize + kIncrementSize);
     }
 
     time_t OID::asTimeT() {
-        int time;
-        char* T = (char *) &time;
-        T[0] = data[3];
-        T[1] = data[2];
-        T[2] = data[1];
-        T[3] = data[0];
+        const Timestamp time = getTimestamp();
         return time;
     }
 

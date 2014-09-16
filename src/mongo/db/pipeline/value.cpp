@@ -166,8 +166,8 @@ namespace mongo {
         }
 
         case jstOID:
-            BOOST_STATIC_ASSERT(sizeof(_storage.oid) == sizeof(OID));
-            memcpy(_storage.oid, elem.OID().getData(), sizeof(OID));
+            BOOST_STATIC_ASSERT(sizeof(_storage.oid) == OID::kOIDSize);
+            memcpy(_storage.oid, elem.OID().getData(), OID::kOIDSize);
             break;
 
         case Bool:

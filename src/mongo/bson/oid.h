@@ -31,26 +31,30 @@
 
 #include <string>
 
+#include "mongo/base/data_view.h"
 #include "mongo/bson/util/misc.h"
+#include "mongo/platform/endian.h"
+#include "mongo/stdx/type_traits.h"
 #include "mongo/util/hex.h"
 
 namespace mongo {
 
-#pragma pack(1)
-    /** Object ID type.
-        BSON objects typically have an _id field for the object id.  This field should be the first
-        member of the object when present.  class OID is a special type that is a 12 byte id which
-        is likely to be unique to the system.  You may also use other types for _id's.
-        When _id field is missing from a BSON object, on an insert the database may insert one
-        automatically in certain circumstances.
-
-        Warning: You must call OID::newState() after a fork().
-
-        Typical contents of the BSON ObjectID is a 12-byte value consisting of a 4-byte timestamp (seconds since epoch),
-        a 3-byte machine id, a 2-byte process id, and a 3-byte counter. Note that the timestamp and counter fields must
-        be stored big endian unlike the rest of BSON. This is because they are compared byte-by-byte and we want to ensure
-        a mostly increasing order.
-    */
+    /** 
+     * Object ID type.
+     * BSON objects typically have an _id field for the object id.  This field should be the first
+     * member of the object when present.  class OID is a special type that is a 12 byte id which
+     * is likely to be unique to the system.  You may also use other types for _id's.
+     * When _id field is missing from a BSON object, on an insert the database may insert one
+     * automatically in certain circumstances.
+     *
+     * Typical contents of the BSON ObjectID is a 12-byte value consisting of a 4-byte timestamp (seconds since epoch),
+     * in the highest order 4 bytes followed by a 5 byte value unique to this machine AND process, followed by a 3 byte
+     * counter.
+     * 
+     * TODO:: explain endianness
+     *
+     * Warning: You MUST call OID::justForked() after a fork(). This ensures that this process will generate unique OIDs.
+     */
     class OID {
     public:
 
@@ -63,49 +67,45 @@ namespace mongo {
             size_t operator() (const OID& oid) const;
         };
 
-        OID() : a(0), b(0) { }
+        // Need to decay _data to a char*
+        OID() : _data(), _view(static_cast<char*>(_data)) {}
 
         enum {
             kOIDSize = 12,
-            kIncSize = 3
+            kTimestampSize = 4,
+            kUniqueSize = 5,
+            kIncrementSize = 3
         };
 
         /** init from a 24 char hex std::string */
-        explicit OID(const std::string &s) { init(s); }
+        explicit OID(const std::string &s) : _data(), _view(static_cast<char*>(_data)) { init(s); }
 
         /** init from a reference to a 12-byte array */
-        explicit OID(const unsigned char (&arr)[kOIDSize]) {
-            memcpy(data, arr, sizeof(arr));
+        explicit OID(const unsigned char (&arr)[kOIDSize]) : _data(), _view(static_cast<char*>(_data)) {
+            std::memcpy(_data, arr, sizeof(arr));
         }
 
         /** initialize to 'null' */
-        void clear() { a = 0; b = 0; }
+        void clear() { std::memset(_data, 0, kOIDSize); }
 
-        const unsigned char *getData() const { return data; }
+        const char *getData() const { return _data; }
 
-        bool operator==(const OID& r) const { return a==r.a && b==r.b; }
-        bool operator!=(const OID& r) const { return a!=r.a || b!=r.b; }
-        int compare( const OID& other ) const { return memcmp( data , other.data , kOIDSize ); }
+        bool operator==(const OID& r) const { return compare(r) == 0; }
+        bool operator!=(const OID& r) const { return compare(r) != 0; }
+        int compare( const OID& other ) const { return memcmp( _data , other._data , kOIDSize ); }
         bool operator<( const OID& other ) const { return compare( other ) < 0; }
         bool operator<=( const OID& other ) const { return compare( other ) <= 0; }
 
         /** @return the object ID output as 24 hex digits */
-        std::string str() const { return toHexLower(data, kOIDSize); }
+        std::string str() const { return toHexLower(_data, kOIDSize); }
         std::string toString() const { return str(); }
         /** @return the random/sequential part of the object ID as 6 hex digits */
-        std::string toIncString() const { return toHexLower(_inc, kIncSize); }
+        std::string toIncString() const { return toHexLower(getInc()._inc, kIncrementSize); }
 
         static OID gen() { OID o; o.init(); return o; }
 
         /** sets the contents to a new oid / randomized value */
         void init();
-
-        /** sets the contents to a new oid
-         * guaranteed to be sequential
-         * NOT guaranteed to be globally unique
-         *     only unique for this process
-         * */
-        void initSequential();
 
         /** init from a 24 char hex std::string */
         void init( const std::string& s );
@@ -116,7 +116,11 @@ namespace mongo {
         time_t asTimeT();
         Date_t asDateT() { return asTimeT() * (long long)1000; }
 
-        bool isSet() const { return a || b; }
+        // True iff the OID is not empty
+        bool isSet() const {
+            char zero[kOIDSize] = {0};
+            return memcmp(_data, zero, kOIDSize) != 0;
+        }
 
         /**
          * this is not consistent
@@ -128,41 +132,40 @@ namespace mongo {
         static void justForked();
 
         static unsigned getMachineId(); // features command uses
-        static void regenMachineId(); // used by unit tests
+        static void regenMachineId();
 
     private:
-        struct MachineAndPid {
-            unsigned char _machineNumber[3];
-            unsigned short _pid;
-            bool operator!=(const OID::MachineAndPid& rhs) const;
-        };
-        static MachineAndPid ourMachine, ourMachineAndPid;
-        union {
-            struct {
-                // 12 bytes total
-                unsigned char _time[4];
-                MachineAndPid _machineAndPid;
-                unsigned char _inc[3];
-            };
-            struct {
-                long long a;
-                unsigned b;
-            };
-            struct {
-                // TODO: get rid of this eventually
-                //       this is a hack because of hash_combine with older versions of boost
-                //       on 32-bit platforms
-                int x;
-                int y;
-                int z;
-            };
-            unsigned char data[kOIDSize];
+        // Timestamp is 4 bytes so we just use int32_t
+        typedef int32_t Timestamp;
+        // Wrappers so we can return stuff by value.
+        class Unique {
+        public:
+            Unique() : _unique() {}
+            static Unique genUnique();
+            uint8_t _unique[kUniqueSize]; 
         };
 
-        static void foldInPid(MachineAndPid& x);
-        static MachineAndPid genMachineAndPid();
+        class Increment {
+        public:
+            static Increment nextIncrement();
+            uint8_t _inc[kIncrementSize];
+        };
+        
+        friend struct endian::ByteOrderConverter<Increment>;
+
+        void setTimestamp(const Timestamp timestamp);
+        void setUnique(const Unique unique);
+        void setIncrement(const Increment inc);
+
+        Timestamp getTimestamp() const;
+        Unique    getUnique() const;
+        Increment getInc() const;
+
+        char _data[kOIDSize];
+        DataView _view;
+
+        static Unique _machineUnique;
     };
-#pragma pack()
 
     std::ostream& operator<<( std::ostream &s, const OID &o );
     inline StringBuilder& operator<< (StringBuilder& s, const OID& o) { return (s << o.str()); }
@@ -181,4 +184,4 @@ namespace mongo {
         JS
     };
 
-}
+} // namespace mongo
