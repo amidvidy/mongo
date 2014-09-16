@@ -166,8 +166,8 @@ namespace mongo {
         }
 
         case jstOID:
-            BOOST_STATIC_ASSERT(sizeof(_storage.oid) == sizeof(OID));
-            memcpy(_storage.oid, elem.OID().getData(), sizeof(OID));
+            BOOST_STATIC_ASSERT(sizeof(_storage.oid) == OID::kOIDSize);
+            memcpy(_storage.oid, elem.OID().view().view(), OID::kOIDSize);
             break;
 
         case Bool:
@@ -600,7 +600,7 @@ namespace mongo {
             }
 
         case jstOID:
-            return memcmp(rL._storage.oid, rR._storage.oid, sizeof(OID));
+            return memcmp(rL._storage.oid, rR._storage.oid, OID::kOIDSize);
 
         case Code:
         case Symbol:

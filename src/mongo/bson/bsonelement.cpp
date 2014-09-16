@@ -134,7 +134,6 @@ namespace mongo {
             break;
         }
         case DBRef: {
-            mongo::OID *x = (mongo::OID *) (valuestr() + valuestrsize());
             if ( format == TenGen )
                 s << "Dbref( ";
             else
@@ -142,7 +141,7 @@ namespace mongo {
             s << '"' << valuestr() << "\", ";
             if ( format != TenGen )
                 s << "\"$id\" : ";
-            s << '"' << *x << "\" ";
+            s << '"' << mongo::OID::from(valuestr() + valuestrsize()) << "\" ";
             if ( format == TenGen )
                 s << ')';
             else
@@ -672,11 +671,7 @@ namespace mongo {
             break;
         case DBRef:
             s << "DBRef('" << valuestr() << "',";
-            {
-                mongo::OID x;
-                std::memcpy(&x, valuestr() + valuestrsize(), sizeof(x));
-                s << x << ')';
-            }
+            s << mongo::OID::from(valuestr() + valuestrsize()) << ')';
             break;
         case jstOID:
             s << "ObjectId('";

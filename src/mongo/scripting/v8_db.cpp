@@ -689,7 +689,7 @@ namespace mongo {
             oid.init(s);
         }
 
-        it->ForceSet(scope->v8StringData("str"), v8::String::New(oid.str().c_str()));
+        it->ForceSet(scope->v8StringData("str"), v8::String::New(oid.toString().c_str()));
         return it;
     }
 
