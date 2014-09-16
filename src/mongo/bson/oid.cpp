@@ -37,7 +37,6 @@
 #include "mongo/base/init.h"
 #include "mongo/bson/bsonobjbuilder.h"
 #include "mongo/platform/atomic_word.h"
-
 #include "mongo/platform/process_id.h"
 #include "mongo/platform/random.h"
 

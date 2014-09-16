@@ -34,7 +34,6 @@
 #include "mongo/base/data_view.h"
 #include "mongo/bson/util/misc.h"
 #include "mongo/platform/endian.h"
-#include "mongo/stdx/type_traits.h"
 #include "mongo/util/hex.h"
 
 namespace mongo {
