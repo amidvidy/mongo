@@ -58,7 +58,8 @@ namespace mongo {
     OID::Unique OID::_machineUnique = OID::Unique();
 
     // TODO: figure out prereqs... probably everything
-    MONGO_INITIALIZER(OIDEntropy)(InitializerContext* context) {
+    MONGO_INITIALIZER_GENERAL(OIDGeneration, MONGO_NO_PREREQUISITES, ("default"))
+        (InitializerContext* context) {
         // We use a secureRandom to initialize the PRNG. According to Andy we can't use time as 
         // a seed, so we use the OS's pool of secure entropy.
         boost::scoped_ptr<SecureRandom> seedSrc(SecureRandom::create()); 
