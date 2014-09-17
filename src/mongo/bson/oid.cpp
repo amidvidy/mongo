@@ -50,7 +50,7 @@ namespace mongo {
         
         const std::size_t kTimestampOffset = 0;
         const std::size_t kUniqueOffset = kTimestampOffset + OID::kTimestampSize;  // 4
-        const std::size_t kIncOffset = kUniqueOffset + OID::kUniqueSize;  // 9
+        const std::size_t kIncrementOffset = kUniqueOffset + OID::kUniqueSize;  // 9
     }
 
     // Set in initializer and regenMachineId()
@@ -112,30 +112,30 @@ namespace mongo {
         return u;
     }
 
-    inline void OID::setTimestamp(const OID::Timestamp timestamp) {
+    void OID::setTimestamp(const OID::Timestamp timestamp) {
         _view.writeBE<OID::Timestamp>(timestamp, kTimestampOffset);
     }
 
-    inline void OID::setUnique(const OID::Unique unique) {
+    void OID::setUnique(const OID::Unique unique) {
         // Byte order doesn't matter here
         _view.writeNative<OID::Unique>(unique, kUniqueOffset);
     }
 
-    inline void OID::setIncrement(const OID::Increment inc) {
-        _view.writeBE<OID::Increment>(inc, kIncOffset);
+    void OID::setIncrement(const OID::Increment inc) {
+        _view.writeBE<OID::Increment>(inc, kIncrementOffset);
     }
 
-    inline OID::Timestamp OID::getTimestamp() const {
+    OID::Timestamp OID::getTimestamp() const {
         return _view.readBE<Timestamp>(kTimestampOffset);
     }
 
-    inline OID::Unique OID::getUnique() const {
+    OID::Unique OID::getUnique() const {
         // Byte order doesn't matter here
         return _view.readNative<Unique>(kUniqueOffset);
     }
 
-    inline OID::Increment OID::getIncrement() const {
-        return _view.readBE<Increment>(kUniqueOffset);
+    OID::Increment OID::getIncrement() const {
+        return _view.readBE<Increment>(kIncrementOffset);
     }
 
     void OID::hash_combine(size_t &seed) const {
