@@ -1316,6 +1316,20 @@ namespace JsobjTests {
             }
         };
 
+        class Seq {
+        public:
+            void run() {
+                for ( int i=0; i<10000; i++ ) {
+                    OID a;
+                    OID b;
+                    
+                    a.init();
+                    b.init();
+
+                    ASSERT( a < b );
+                }
+            }
+        };
     } // namespace OIDTests
 
 
@@ -2271,6 +2285,7 @@ namespace JsobjTests {
             add< OIDTests::increasing >();
             add< OIDTests::ToDate >();
             add< OIDTests::FromDate >();
+            add< OIDTests::Seq >();
             add< ValueStreamTests::LabelBasic >();
             add< ValueStreamTests::LabelShares >();
             add< ValueStreamTests::LabelDouble >();
