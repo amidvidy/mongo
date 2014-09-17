@@ -94,8 +94,8 @@ namespace mongo {
         uint64_t nextCtr = counter->fetchAndAdd(1);
         OID::Increment incr;
 
-        // On big endian we need to shift since we want the lowest
-        // order bytes.
+        // On big endian we need to shift since we want the least
+        // significant bits.
 #if MONGO_BYTE_ORDER == 4321
         nextCtr <<= 8 * (sizeof(uint64_t) - kIncrementSize);
 #endif
