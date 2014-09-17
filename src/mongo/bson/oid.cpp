@@ -90,45 +90,51 @@ namespace mongo {
         };
     }
 
-    // TODO::fixme
-    inline OID::Increment OID::Increment::nextIncrement() {
+    OID::Increment OID::Increment::nextIncrement() {
         uint64_t nextCtr = counter->fetchAndAdd(1);
         OID::Increment incr;
-        // Copy the last 3 bytes
+
+        // On big endian we need to shift since we want the lowest
+        // order bytes.
+#if MONGO_BYTE_ORDER == 4321
+        nextCtr <<= 8 * (sizeof(uint64_t) - kIncrementSize);
+#endif
+
+        // Copy the lowest 3 bytes
         std::memcpy(incr._inc, &nextCtr, kIncrementSize);
         return incr;
     }
 
-    inline OID::Unique OID::Unique::genUnique() {
+    OID::Unique OID::Unique::genUnique() {
         int64_t rand = entropy->nextInt64();
         OID::Unique u;
         std::memcpy(u._unique, &rand, kUniqueSize);
         return u;
     }
 
-    void OID::setTimestamp(const OID::Timestamp timestamp) {
+    inline void OID::setTimestamp(const OID::Timestamp timestamp) {
         _view.writeBE<OID::Timestamp>(timestamp, kTimestampOffset);
     }
 
-    void OID::setUnique(const OID::Unique unique) {
+    inline void OID::setUnique(const OID::Unique unique) {
         // Byte order doesn't matter here
         _view.writeNative<OID::Unique>(unique, kUniqueOffset);
     }
 
-    void OID::setIncrement(const OID::Increment inc) {
+    inline void OID::setIncrement(const OID::Increment inc) {
         _view.writeBE<OID::Increment>(inc, kIncOffset);
     }
 
-    OID::Timestamp OID::getTimestamp() const {
+    inline OID::Timestamp OID::getTimestamp() const {
         return _view.readBE<Timestamp>(kTimestampOffset);
     }
 
-    OID::Unique OID::getUnique() const {
+    inline OID::Unique OID::getUnique() const {
         // Byte order doesn't matter here
         return _view.readNative<Unique>(kUniqueOffset);
     }
 
-    OID::Increment OID::getIncrement() const {
+    inline OID::Increment OID::getIncrement() const {
         return _view.readBE<Increment>(kUniqueOffset);
     }
 
@@ -188,8 +194,6 @@ namespace mongo {
     }
 
     time_t OID::asTimeT() {
-        const Timestamp time = getTimestamp();
-        return time;
+        return getTimestamp();
     }
-
 }
