@@ -90,4 +90,41 @@ namespace {
         ASSERT_EQUALS(uint8_t(oidBytes[1]), 0xADu);
         ASSERT_EQUALS(uint8_t(oidBytes[2]), 0xDEu);
     }
+
+    TEST(Basic, Deserialize) {
+        OID o1;
+
+        char* mutBytes = o1.getDataMutable();
+
+        uint8_t OIDbytes[] = {
+            0xDEu, 0xADu, 0xBEu, 0xEFu,        // timestamp is -559038737 (signed)
+            0x00u, 0x00u, 0x00u, 0x00u, 0x00u, // unique is 0
+            0x11u, 0x22u, 0x33u                // increment is 1122867
+        };
+
+        std::memcpy(mutBytes, &OIDbytes, OID::kOIDSize);
+
+        ASSERT_EQUALS(o1.getTimestamp(), -559038737);
+        OID::Unique u = o1.getUnique();
+        for (std::size_t i = 0; i < OID::kUniqueSize; ++i) {
+            ASSERT_EQUALS(u._unique[i], 0x00u);
+        }
+        OID::Increment i = o1.getIncrement();
+
+        // construct a uint32_t from increment
+        // recall that i is a 3 byte integer, now in native endianness
+        uint32_t incr =
+#if MONGO_BYTE_ORDER == 1234
+            // little endian
+            ((uint32_t(i._inc[2]) << 16)) |
+            ((uint32_t(i._inc[1]) << 8))  |
+            uint32_t(i._inc[0]);
+#elif MONGO_BYTE_ORDER == 4321
+            // big endian
+            ((uint32_t(i._inc[0]) << 16)) |
+            ((uint32_t(i._inc[1]) << 8))  |
+            uint32_t(i._inc[2]);
+#endif
+        ASSERT_EQUALS(1122867u, incr);
+    }
 }
