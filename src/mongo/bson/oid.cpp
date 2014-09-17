@@ -51,7 +51,7 @@ namespace mongo {
         const std::size_t kTimestampOffset = 0;
         const std::size_t kUniqueOffset = kTimestampOffset + OID::kTimestampSize;  // 4
         const std::size_t kIncOffset = kUniqueOffset + OID::kUniqueSize;  // 9
-   }
+    }
 
     // Set in initializer and regenMachineId()
     OID::Unique OID::_machineUnique = OID::Unique();
@@ -90,37 +90,33 @@ namespace mongo {
         };
     }
 
+    // TODO::fixme
     inline OID::Increment OID::Increment::nextIncrement() {
         uint64_t nextCtr = counter->fetchAndAdd(1);
-        // We shift the lowest 3 bytes up to the highest position so we can
-        // avoid pointer arithmetic
-        nextCtr <<= sizeof(uint64_t) - OID::kIncrementSize;
-        
         OID::Increment incr;
         // Copy the last 3 bytes
         std::memcpy(incr._inc, &nextCtr, kIncrementSize);
-        
         return incr;
     }
 
     inline OID::Unique OID::Unique::genUnique() {
         int64_t rand = entropy->nextInt64();
         OID::Unique u;
-        std::memcpy(u._unique, &rand, OID::kUniqueSize);
+        std::memcpy(u._unique, &rand, kUniqueSize);
         return u;
     }
 
     void OID::setTimestamp(const OID::Timestamp timestamp) {
-        _view.writeBE(timestamp, kTimestampOffset);
+        _view.writeBE<OID::Timestamp>(timestamp, kTimestampOffset);
     }
 
     void OID::setUnique(const OID::Unique unique) {
         // Byte order doesn't matter here
-        _view.writeNative(unique, kUniqueOffset);
+        _view.writeNative<OID::Unique>(unique, kUniqueOffset);
     }
 
     void OID::setIncrement(const OID::Increment inc) {
-        _view.writeBE(inc, kIncOffset);
+        _view.writeBE<OID::Increment>(inc, kIncOffset);
     }
 
     OID::Timestamp OID::getTimestamp() const {
@@ -132,7 +128,7 @@ namespace mongo {
         return _view.readNative<Unique>(kUniqueOffset);
     }
 
-    OID::Increment OID::getInc() const {
+    OID::Increment OID::getIncrement() const {
         return _view.readBE<Increment>(kUniqueOffset);
     }
 

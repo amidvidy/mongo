@@ -38,7 +38,7 @@
 
 namespace mongo {
 
-    /** 
+    /**
      * Object ID type.
      * BSON objects typically have an _id field for the object id.  This field should be the first
      * member of the object when present.  class OID is a special type that is a 12 byte id which
@@ -49,7 +49,7 @@ namespace mongo {
      * Typical contents of the BSON ObjectID is a 12-byte value consisting of a 4-byte timestamp (seconds since epoch),
      * in the highest order 4 bytes followed by a 5 byte value unique to this machine AND process, followed by a 3 byte
      * counter.
-     * 
+     *
      * TODO:: explain endianness
      *
      * Warning: You MUST call OID::justForked() after a fork(). This ensures that this process will generate unique OIDs.
@@ -77,17 +77,26 @@ namespace mongo {
         };
 
         /** init from a 24 char hex std::string */
-        explicit OID(const std::string &s) : _data(), _view(static_cast<char*>(_data)) { init(s); }
+        explicit OID(const std::string &s)
+            : _data()
+            , _view(static_cast<char*>(_data)) {
+            init(s);
+        }
 
         /** init from a reference to a 12-byte array */
-        explicit OID(const unsigned char (&arr)[kOIDSize]) : _data(), _view(static_cast<char*>(_data)) {
+        explicit OID(const unsigned char (&arr)[kOIDSize])
+            : _data()
+            , _view(static_cast<char*>(_data)) {
             std::memcpy(_data, arr, sizeof(arr));
         }
 
         /** initialize to 'null' */
         void clear() { std::memset(_data, 0, kOIDSize); }
 
-        const char *getData() const { return _data; }
+        const char* getData() const { return _data; }
+        // Returns a mutable view to the data. Suitable for memcpy.
+        // Use with care.
+        char* getDataMutable() const { return _view.view(); }
 
         bool operator==(const OID& r) const { return compare(r) == 0; }
         bool operator!=(const OID& r) const { return compare(r) != 0; }
@@ -99,9 +108,12 @@ namespace mongo {
         std::string str() const { return toHexLower(_data, kOIDSize); }
         std::string toString() const { return str(); }
         /** @return the random/sequential part of the object ID as 6 hex digits */
-        std::string toIncString() const { return toHexLower(getInc()._inc, kIncrementSize); }
+        std::string toIncString() const {
+            return toHexLower(getIncrement()._inc, kIncrementSize);
+        }
 
         static OID gen() { OID o; o.init(); return o; }
+        static OID max() { OID o; memset(o._data, 0xFF, kOIDSize); return o; }
 
         /** sets the contents to a new oid / randomized value */
         void init();
@@ -133,7 +145,9 @@ namespace mongo {
         static unsigned getMachineId(); // features command uses
         static void regenMachineId();
 
-    private:
+        // Internal stuff, public to ease testing.
+        // TODO: figure out way to make this less accessible
+
         // Timestamp is 4 bytes so we just use int32_t
         typedef int32_t Timestamp;
         // Wrappers so we can return stuff by value.
@@ -141,7 +155,7 @@ namespace mongo {
         public:
             Unique() : _unique() {}
             static Unique genUnique();
-            uint8_t _unique[kUniqueSize]; 
+            uint8_t _unique[kUniqueSize];
         };
 
         class Increment {
@@ -149,7 +163,7 @@ namespace mongo {
             static Increment nextIncrement();
             uint8_t _inc[kIncrementSize];
         };
-        
+
         friend struct endian::ByteOrderConverter<Increment>;
 
         void setTimestamp(const Timestamp timestamp);
@@ -158,8 +172,8 @@ namespace mongo {
 
         Timestamp getTimestamp() const;
         Unique    getUnique() const;
-        Increment getInc() const;
-
+        Increment getIncrement() const;
+    private:
         char _data[kOIDSize];
         DataView _view;
 

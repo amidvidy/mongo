@@ -600,7 +600,7 @@ namespace mongo {
             }
 
         case jstOID:
-            return memcmp(rL._storage.oid, rR._storage.oid, sizeof(OID));
+            return memcmp(rL._storage.oid, rR._storage.oid, OID::kOIDSize);
 
         case Code:
         case Symbol:

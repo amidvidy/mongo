@@ -491,7 +491,7 @@ namespace mongo {
             _b.appendStr( fieldName );
             _b.appendNum( (int) ns.size() + 1 );
             _b.appendStr( ns );
-            _b.appendBuf( (void *) &oid, 12 );
+            _b.appendBuf( oid.getData(), OID::kOIDSize );
             return *this;
         }
 

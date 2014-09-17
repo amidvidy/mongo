@@ -237,9 +237,14 @@ namespace mongo {
         */
         double number() const { return numberDouble(); }
 
+
         /** Retrieve the object ID stored in the object.
             You must ensure the element is of type jstOID first. */
-        const mongo::OID &__oid() const { return *reinterpret_cast< const mongo::OID* >( value() ); }
+        const mongo::OID __oid() const {
+            mongo::OID oid;
+            std::memcpy(oid.getDataMutable(), value(), OID::kOIDSize);
+            return oid;
+        }
 
         /** True if element is null. */
         bool isNull() const {
