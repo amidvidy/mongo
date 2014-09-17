@@ -26,6 +26,7 @@
  */
 
 #include "mongo/bson/oid.h"
+#include "mongo/platform/endian.h"
 #include "mongo/unittest/unittest.h"
 
 namespace {
@@ -54,8 +55,39 @@ namespace {
                                 OID::kUniqueSize) != 0);
     }
 
-    TEST(TimestampIsBigEndian, Endian) {
-        OID o1;
+    TEST(TimestampIsBigEndian, Endianness) {
+        OID o1; //zeroed
+        OID::Timestamp ts = 123;
+        o1.setTimestamp(ts);
+
+        int32_t ts_big = mongo::endian::nativeToBig<int32_t>(123);
+
+        const char* oidBytes = o1.getData();
+        ASSERT(std::memcmp(&ts_big, oidBytes, sizeof(int32_t)) == 0);
     }
 
+    TEST(IncrementIsBigEndian, Endianness) {
+        OID o1; // zeroed
+        OID::Increment incr;
+        //Increment is a 3 byte counter
+#if MONGO_BYTE_ORDER == 1234 // little endian
+        incr._inc[0] = 0xDEu;
+        incr._inc[1] = 0xADu;
+        incr._inc[2] = 0xBEu;
+#else // big endian
+        incr._inc[0] = 0xBEu;
+        incr._inc[1] = 0xADu;
+        incr._inc[2] = 0xDEu;
+#endif
+
+        o1.setIncrement(incr);
+
+        const char* oidBytes = o1.getData();
+        oidBytes += OID::kTimestampSize + OID::kUniqueSize;
+
+        // now at start of increment
+        ASSERT_EQUALS(uint8_t(oidBytes[0]), 0xBEu);
+        ASSERT_EQUALS(uint8_t(oidBytes[1]), 0xADu);
+        ASSERT_EQUALS(uint8_t(oidBytes[2]), 0xDEu);
+    }
 }
