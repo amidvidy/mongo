@@ -107,7 +107,7 @@ namespace mongo {
         const char* getData() const { return _data; }
         // Returns a mutable view to the data. Suitable for memcpy.
         // Use with care.
-        char* getDataMutable() const { return _view.view(); }
+        char* getDataMutable() { return _view.view(); }
 
         bool operator==(const OID& r) const { return compare(r) == 0; }
         bool operator!=(const OID& r) const { return compare(r) != 0; }
