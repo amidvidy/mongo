@@ -830,7 +830,7 @@ static void startupConfigActions(const std::vector<std::string>& args) {
 }
 
 MONGO_INITIALIZER_GENERAL(CreateAuthorizationManager,
-                          ("SetupInternalSecurityUser", "default"),
+                          ("SetupInternalSecurityUser", "OIDGeneration"),
                           MONGO_NO_DEPENDENTS)
         (InitializerContext* context) {
     AuthorizationManager* authzManager =
