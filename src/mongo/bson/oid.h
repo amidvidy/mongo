@@ -166,6 +166,8 @@ namespace mongo {
 
         friend struct endian::ByteOrderConverter<Increment>;
 
+        // TODO: maybe ifdef C++11 versions of these that take
+        // Rvalue references?
         void setTimestamp(const Timestamp timestamp);
         void setUnique(const Unique unique);
         void setIncrement(const Increment inc);
