@@ -46,13 +46,24 @@ namespace mongo {
      * When _id field is missing from a BSON object, on an insert the database may insert one
      * automatically in certain circumstances.
      *
-     * Typical contents of the BSON ObjectID is a 12-byte value consisting of a 4-byte timestamp (seconds since epoch),
-     * in the highest order 4 bytes followed by a 5 byte value unique to this machine AND process, followed by a 3 byte
-     * counter.
+     * The BSON ObjectID is a 12-byte value consisting of a 4-byte timestamp (seconds since epoch),
+     * in the highest order 4 bytes followed by a 5 byte value unique to this machine AND process, 
+     * followed by a 3 byte counter.
      *
-     * TODO:: explain endianness
+     *               4 byte timestamp    5 byte process unique   3 byte counter
+     *             |<----------------->|<---------------------->|<------------->
+     * OID layout: [----|----|----|----|----|----|----|----|----|----|----|----]
+     *             0                   4                   8                   12
+     *                                  
+     * The timestamp is a big endian 4 byte signed-integer.
      *
-     * Warning: You MUST call OID::justForked() after a fork(). This ensures that this process will generate unique OIDs.
+     * The process unique is an arbitrary sequence of 5 bytes. There are no endianness concerns
+     * since it is never interpreted as a multi-byte value.
+     *
+     * The counter is a 3 byte unsigned integer.
+     *
+     * Warning: You MUST call OID::justForked() after a fork(). This ensures that this process will 
+     * generate unique OIDs.
      */
     class OID {
     public:
