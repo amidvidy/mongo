@@ -128,13 +128,6 @@ namespace mongo {
 
     Timer startupSrandTimer;
 
-    // Why do we need this?
-    struct MyStartupTests {
-        MyStartupTests() {
-            verify( OID::kOIDSize == 12 );
-        }
-    } mystartupdbcpp;
-
     QueryResult::View emptyMoreResult(long long);
 
 

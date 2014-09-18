@@ -94,8 +94,7 @@ namespace mongo {
 
         /** init from a reference to a 12-byte array */
         explicit OID(const unsigned char (&arr)[kOIDSize]) {
-            // FIXME
-            std::memcpy(view().view(), arr, sizeof(arr));
+            std::memcpy(_data, arr, sizeof(arr));
         }
 
         /** initialize to 'null' */
@@ -117,9 +116,18 @@ namespace mongo {
             return o;
         }
 
+        // Caller must ensure that the buffer is valid for kOIDSize bytes.
+        // this is templated because some places use unsigned char vs signed char
+        template<typename T>
+        static OID from(T* buf) {
+            OID o((no_initialize_tag()));
+            std::memcpy(o._data, buf, OID::kOIDSize);
+            return o;
+        }
+
         static OID max() {
             OID o((no_initialize_tag()));
-            memset(o._data, 0xFF, kOIDSize);
+            std::memset(o._data, 0xFF, kOIDSize);
             return o;
         }
 
@@ -182,21 +190,24 @@ namespace mongo {
             return ConstDataView(_data);
         }
 
-        DataView view() {
+    private:
+        // Internal mutable view
+        DataView _view() {
             return DataView(_data);
         }
-    private:
+
         // When we are going to immediately overwrite the bytes, there is no point in zero
         // initializing the data first.
         struct no_initialize_tag {};
         explicit OID(no_initialize_tag) {}
 
+        char _garbage[11];
         char _data[kOIDSize];
     };
 
     std::ostream& operator<<( std::ostream &s, const OID &o );
-    inline StringBuilder& operator<< (StringBuilder& s, const OID& o) { 
-        return (s << o.toString()); 
+    inline StringBuilder& operator<< (StringBuilder& s, const OID& o) {
+        return (s << o.toString());
     }
 
     /** Formatting mode for generating JSON from BSON.

@@ -84,16 +84,16 @@ namespace mongo {
     }
 
     void OID::setTimestamp(const OID::Timestamp timestamp) {
-        view().writeBE<OID::Timestamp>(timestamp, kTimestampOffset);
+        _view().writeBE<OID::Timestamp>(timestamp, kTimestampOffset);
     }
 
     void OID::setInstanceUnique(const OID::InstanceUnique unique) {
         // Byte order doesn't matter here
-        view().writeNative<InstanceUnique>(unique, kInstanceUniqueOffset);
+        _view().writeNative<InstanceUnique>(unique, kInstanceUniqueOffset);
     }
 
     void OID::setIncrement(const OID::Increment inc) {
-        view().writeNative<Increment>(inc, kIncrementOffset);
+        _view().writeNative<Increment>(inc, kIncrementOffset);
     }
 
     OID::Timestamp OID::getTimestamp() const {
@@ -162,7 +162,7 @@ namespace mongo {
     void OID::init(Date_t date, bool max) {
         setTimestamp(uint32_t(date / 1000));
         uint64_t rest = max ? std::numeric_limits<uint64_t>::max() : 0u;
-        std::memcpy(view().view(kInstanceUniqueOffset), &rest,
+        std::memcpy(_view().view(kInstanceUniqueOffset), &rest,
                     kInstanceUniqueSize + kIncrementSize);
     }
 

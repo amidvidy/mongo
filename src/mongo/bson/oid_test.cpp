@@ -86,9 +86,6 @@ namespace {
     }
 
     TEST(Basic, Deserialize) {
-        OID o1;
-
-        char* mutBytes = o1.view().view();
 
         uint8_t OIDbytes[] = {
             0xDEu, 0xADu, 0xBEu, 0xEFu,        // timestamp is -559038737 (signed)
@@ -96,7 +93,7 @@ namespace {
             0x11u, 0x22u, 0x33u                // increment is 1122867
         };
 
-        std::memcpy(mutBytes, &OIDbytes, OID::kOIDSize);
+        OID o1 = OID::fromBuf(OIDbytes);
 
         ASSERT_EQUALS(o1.getTimestamp(), -559038737);
         OID::InstanceUnique u = o1.getInstanceUnique();
