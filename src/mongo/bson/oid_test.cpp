@@ -51,8 +51,8 @@ namespace {
         OID::justForked();
         OID o2 = OID::gen();
 
-        ASSERT_TRUE(std::memcmp(o1.getUnique()._unique, o2.getUnique()._unique,
-                                OID::kUniqueSize) != 0);
+        ASSERT_TRUE(std::memcmp(o1.getInstanceUnique()._bytes, o2.getInstanceUnique()._bytes,
+                                OID::kInstanceUniqueSize) != 0);
     }
 
     TEST(TimestampIsBigEndian, Endianness) {
@@ -62,28 +62,22 @@ namespace {
 
         int32_t ts_big = mongo::endian::nativeToBig<int32_t>(123);
 
-        const char* oidBytes = o1.getData();
+        const char* oidBytes = o1.view().view();
         ASSERT(std::memcmp(&ts_big, oidBytes, sizeof(int32_t)) == 0);
     }
 
     TEST(IncrementIsBigEndian, Endianness) {
         OID o1; // zeroed
         OID::Increment incr;
-        //Increment is a 3 byte counter
-#if MONGO_BYTE_ORDER == 1234 // little endian
-        incr._inc[0] = 0xDEu;
-        incr._inc[1] = 0xADu;
-        incr._inc[2] = 0xBEu;
-#else // big endian
-        incr._inc[0] = 0xBEu;
-        incr._inc[1] = 0xADu;
-        incr._inc[2] = 0xDEu;
-#endif
+        //Increment is a 3 byte counter big endian
+        incr._bytes[0] = 0xBEu;
+        incr._bytes[1] = 0xADu;
+        incr._bytes[2] = 0xDEu;
 
         o1.setIncrement(incr);
 
-        const char* oidBytes = o1.getData();
-        oidBytes += OID::kTimestampSize + OID::kUniqueSize;
+        const char* oidBytes = o1.view().view();
+        oidBytes += OID::kTimestampSize + OID::kInstanceUniqueSize;
 
         // now at start of increment
         ASSERT_EQUALS(uint8_t(oidBytes[0]), 0xBEu);
@@ -94,7 +88,7 @@ namespace {
     TEST(Basic, Deserialize) {
         OID o1;
 
-        char* mutBytes = o1.getDataMutable();
+        char* mutBytes = o1.view().view();
 
         uint8_t OIDbytes[] = {
             0xDEu, 0xADu, 0xBEu, 0xEFu,        // timestamp is -559038737 (signed)
@@ -105,26 +99,19 @@ namespace {
         std::memcpy(mutBytes, &OIDbytes, OID::kOIDSize);
 
         ASSERT_EQUALS(o1.getTimestamp(), -559038737);
-        OID::Unique u = o1.getUnique();
-        for (std::size_t i = 0; i < OID::kUniqueSize; ++i) {
-            ASSERT_EQUALS(u._unique[i], 0x00u);
+        OID::InstanceUnique u = o1.getInstanceUnique();
+        for (std::size_t i = 0; i < OID::kInstanceUniqueSize; ++i) {
+            ASSERT_EQUALS(u._bytes[i], 0x00u);
         }
         OID::Increment i = o1.getIncrement();
 
         // construct a uint32_t from increment
         // recall that i is a 3 byte integer, now in native endianness
         uint32_t incr =
-#if MONGO_BYTE_ORDER == 1234
-            // little endian
-            ((uint32_t(i._inc[2]) << 16)) |
-            ((uint32_t(i._inc[1]) << 8))  |
-            uint32_t(i._inc[0]);
-#elif MONGO_BYTE_ORDER == 4321
-            // big endian
-            ((uint32_t(i._inc[0]) << 16)) |
-            ((uint32_t(i._inc[1]) << 8))  |
-            uint32_t(i._inc[2]);
-#endif
+            ((uint32_t(i._bytes[0]) << 16)) |
+            ((uint32_t(i._bytes[1]) << 8))  |
+              uint32_t(i._bytes[2]);
+
         ASSERT_EQUALS(1122867u, incr);
     }
 }

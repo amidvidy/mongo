@@ -56,7 +56,7 @@ namespace mongo {
             // b.init();
             // verify( memcmp(id.getData(), b.getData(), 12) < 0 );
 
-            b.init( id.str() );
+            b.init( id.toString() );
             verify( b == id );
         }
 

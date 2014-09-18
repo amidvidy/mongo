@@ -242,7 +242,7 @@ namespace mongo {
             You must ensure the element is of type jstOID first. */
         const mongo::OID __oid() const {
             mongo::OID oid;
-            std::memcpy(oid.getDataMutable(), value(), OID::kOIDSize);
+            std::memcpy(oid.view().view(), value(), OID::kOIDSize);
             return oid;
         }
 

@@ -91,7 +91,7 @@ namespace mongo {
         ValueStorage(BSONType t, const OID& o) {
             zero();
             type = t;
-            memcpy(&oid, o.getData(), OID::kOIDSize);
+            memcpy(&oid, o.view().view(), OID::kOIDSize);
         }
 
         ValueStorage(const ValueStorage& rhs) {

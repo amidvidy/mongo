@@ -277,7 +277,7 @@ namespace mongo {
             case jstOID:
                 b.appendUChar(coid|bits);
                 // FIXME: potential safety issue here since __oid is now an RValue?
-                b.appendBuf(e.__oid().getData(), OID::kOIDSize);
+                b.appendBuf(e.__oid().view().view(), OID::kOIDSize);
                 break;
             case BinData:
                 {
@@ -399,7 +399,7 @@ namespace mongo {
                 case coid:
                     {
                        OID oid;
-                       std::memcpy(oid.getDataMutable(), p, OID::kOIDSize);
+                       std::memcpy(oid.view().view(), p, OID::kOIDSize);
                        b.appendOID("", &oid);
                        p += OID::kOIDSize;
                        break;

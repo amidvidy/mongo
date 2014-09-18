@@ -34,35 +34,36 @@
 #include "mongo/base/data_view.h"
 #include "mongo/bson/util/misc.h"
 #include "mongo/platform/endian.h"
+#include "mongo/platform/random.h"
 #include "mongo/util/hex.h"
 
 namespace mongo {
 
     /**
      * Object ID type.
-     * BSON objects typically have an _id field for the object id.  This field should be the first
-     * member of the object when present.  class OID is a special type that is a 12 byte id which
+     * BSON objects typically have an _id field for the object id. This field should be the first
+     * member of the object when present. The OID class is a special type that is a 12 byte id which
      * is likely to be unique to the system.  You may also use other types for _id's.
      * When _id field is missing from a BSON object, on an insert the database may insert one
      * automatically in certain circumstances.
      *
      * The BSON ObjectID is a 12-byte value consisting of a 4-byte timestamp (seconds since epoch),
-     * in the highest order 4 bytes followed by a 5 byte value unique to this machine AND process, 
+     * in the highest order 4 bytes followed by a 5 byte value unique to this machine AND process,
      * followed by a 3 byte counter.
      *
      *               4 byte timestamp    5 byte process unique   3 byte counter
      *             |<----------------->|<---------------------->|<------------->
      * OID layout: [----|----|----|----|----|----|----|----|----|----|----|----]
      *             0                   4                   8                   12
-     *                                  
+     *
      * The timestamp is a big endian 4 byte signed-integer.
      *
      * The process unique is an arbitrary sequence of 5 bytes. There are no endianness concerns
      * since it is never interpreted as a multi-byte value.
      *
-     * The counter is a 3 byte unsigned integer.
+     * The counter is a big endian 3 byte unsigned integer.
      *
-     * Warning: You MUST call OID::justForked() after a fork(). This ensures that this process will 
+     * Warning: You MUST call OID::justForked() after a fork(). This ensures that each process will
      * generate unique OIDs.
      */
     class OID {
@@ -77,54 +78,50 @@ namespace mongo {
             size_t operator() (const OID& oid) const;
         };
 
-        // Need to decay _data to a char*
-        OID() : _data(), _view(static_cast<char*>(_data)) {}
+        OID() : _data() {}
 
         enum {
             kOIDSize = 12,
             kTimestampSize = 4,
-            kUniqueSize = 5,
+            kInstanceUniqueSize = 5,
             kIncrementSize = 3
         };
 
         /** init from a 24 char hex std::string */
-        explicit OID(const std::string &s)
-            : _data()
-            , _view(static_cast<char*>(_data)) {
+        explicit OID(const std::string &s) {
             init(s);
         }
 
         /** init from a reference to a 12-byte array */
-        explicit OID(const unsigned char (&arr)[kOIDSize])
-            : _data()
-            , _view(static_cast<char*>(_data)) {
-            std::memcpy(_data, arr, sizeof(arr));
+        explicit OID(const unsigned char (&arr)[kOIDSize]) {
+            // FIXME
+            std::memcpy(view().view(), arr, sizeof(arr));
         }
 
         /** initialize to 'null' */
         void clear() { std::memset(_data, 0, kOIDSize); }
 
-        const char* getData() const { return _data; }
-        // Returns a mutable view to the data. Suitable for memcpy.
-        // Use with care.
-        char* getDataMutable() { return _view.view(); }
-
-        bool operator==(const OID& r) const { return compare(r) == 0; }
-        bool operator!=(const OID& r) const { return compare(r) != 0; }
         int compare( const OID& other ) const { return memcmp( _data , other._data , kOIDSize ); }
-        bool operator<( const OID& other ) const { return compare( other ) < 0; }
-        bool operator<=( const OID& other ) const { return compare( other ) <= 0; }
+
 
         /** @return the object ID output as 24 hex digits */
-        std::string str() const { return toHexLower(_data, kOIDSize); }
-        std::string toString() const { return str(); }
+        std::string toString() const { return toHexLower(_data, kOIDSize); }
         /** @return the random/sequential part of the object ID as 6 hex digits */
         std::string toIncString() const {
-            return toHexLower(getIncrement()._inc, kIncrementSize);
+            return toHexLower(getIncrement()._bytes, kIncrementSize);
         }
 
-        static OID gen() { OID o; o.init(); return o; }
-        static OID max() { OID o; memset(o._data, 0xFF, kOIDSize); return o; }
+        static OID gen() {
+            OID o((no_initialize_tag()));
+            o.init();
+            return o;
+        }
+
+        static OID max() {
+            OID o((no_initialize_tag()));
+            memset(o._data, 0xFF, kOIDSize);
+            return o;
+        }
 
         /** sets the contents to a new oid / randomized value */
         void init();
@@ -136,12 +133,11 @@ namespace mongo {
         void init( Date_t date, bool max=false );
 
         time_t asTimeT();
-        Date_t asDateT() { return asTimeT() * (long long)1000; }
+        Date_t asDateT() { return asTimeT() * 1000LL; }
 
         // True iff the OID is not empty
         bool isSet() const {
-            char zero[kOIDSize] = {0};
-            return memcmp(_data, zero, kOIDSize) != 0;
+            return compare(OID());
         }
 
         /**
@@ -153,46 +149,55 @@ namespace mongo {
         /** call this after a fork to update the process id */
         static void justForked();
 
-        static unsigned getMachineId(); // features command uses
+        static unsigned getMachineId();  // features command uses
         static void regenMachineId();
 
         // Internal stuff, public to ease testing.
-        // TODO: figure out way to make this less accessible
 
         // Timestamp is 4 bytes so we just use int32_t
         typedef int32_t Timestamp;
+
         // Wrappers so we can return stuff by value.
-        class Unique {
+        class InstanceUnique {
         public:
-            Unique() : _unique() {}
-            static Unique genUnique();
-            uint8_t _unique[kUniqueSize];
+            static InstanceUnique generate(SecureRandom& entropy);
+            uint8_t _bytes[kInstanceUniqueSize];
         };
 
         class Increment {
         public:
-            static Increment nextIncrement();
-            uint8_t _inc[kIncrementSize];
+            static Increment next();
+            uint8_t _bytes[kIncrementSize];
         };
 
-        friend struct endian::ByteOrderConverter<Increment>;
-
-        void setTimestamp(const Timestamp timestamp);
-        void setUnique(const Unique unique);
-        void setIncrement(const Increment inc);
+        void setTimestamp(Timestamp timestamp);
+        void setInstanceUnique(InstanceUnique unique);
+        void setIncrement(Increment inc);
 
         Timestamp getTimestamp() const;
-        Unique    getUnique() const;
+        InstanceUnique getInstanceUnique() const;
         Increment getIncrement() const;
-    private:
-        char _data[kOIDSize];
-        DataView _view;
 
-        static Unique _machineUnique;
+        ConstDataView view() const {
+            return ConstDataView(_data);
+        }
+
+        DataView view() {
+            return DataView(_data);
+        }
+    private:
+        // When we are going to immediately overwrite the bytes, there is no point in zero
+        // initializing the data first.
+        struct no_initialize_tag {};
+        explicit OID(no_initialize_tag) {}
+
+        char _data[kOIDSize];
     };
 
     std::ostream& operator<<( std::ostream &s, const OID &o );
-    inline StringBuilder& operator<< (StringBuilder& s, const OID& o) { return (s << o.str()); }
+    inline StringBuilder& operator<< (StringBuilder& s, const OID& o) { 
+        return (s << o.toString()); 
+    }
 
     /** Formatting mode for generating JSON from BSON.
         See <http://dochub.mongodb.org/core/mongodbextendedjson>
@@ -207,5 +212,10 @@ namespace mongo {
         /** Javascript JSON compatible */
         JS
     };
+
+    inline bool operator==(const OID& lhs, const OID& rhs) { return lhs.compare(rhs) == 0; }
+    inline bool operator!=(const OID& lhs, const OID& rhs) { return lhs.compare(rhs) != 0; }
+    inline bool operator<(const OID& lhs, const OID& rhs) { return lhs.compare(rhs) < 0; }
+    inline bool operator<=(const OID& lhs, const OID& rhs) { return lhs.compare(rhs) <= 0; }
 
 } // namespace mongo

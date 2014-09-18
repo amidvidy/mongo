@@ -45,96 +45,68 @@
 namespace mongo {
 
     namespace {
-        boost::scoped_ptr<PseudoRandom> entropy;
-        boost::scoped_ptr<AtomicUInt64> counter;
-        
-        const std::size_t kTimestampOffset = 0;
-        const std::size_t kUniqueOffset = kTimestampOffset + OID::kTimestampSize;  // 4
-        const std::size_t kIncrementOffset = kUniqueOffset + OID::kUniqueSize;  // 9
-    }
+        boost::scoped_ptr<AtomicUInt32> counter;
 
-    // Set in initializer and regenMachineId()
-    OID::Unique OID::_machineUnique = OID::Unique();
+        const std::size_t kTimestampOffset = 0;
+        const std::size_t kInstanceUniqueOffset = kTimestampOffset +
+                                                  OID::kTimestampSize;  // 4
+        const std::size_t kIncrementOffset = kInstanceUniqueOffset +
+                                             OID::kInstanceUniqueSize;  // 9
+
+        OID::InstanceUnique _instanceUnique;
+    }
 
     MONGO_INITIALIZER_GENERAL(OIDGeneration, MONGO_NO_PREREQUISITES, ("default"))
         (InitializerContext* context) {
-        // We use a secureRandom to initialize the PRNG. According to Andy we can't use time as 
-        // a seed, so we use the OS's pool of secure entropy.
-        boost::scoped_ptr<SecureRandom> seedSrc(SecureRandom::create()); 
-        entropy.reset(new PseudoRandom(seedSrc->nextInt64()));
-        counter.reset(new AtomicUInt64(entropy->nextInt64()));
+        boost::scoped_ptr<SecureRandom> entropy(SecureRandom::create());
+        counter.reset(new AtomicUInt32(uint32_t(entropy->nextInt64())));
 
-        OID::regenMachineId();
+        _instanceUnique = OID::InstanceUnique::generate(*entropy.get());
         return Status::OK();
     }
 
-    // Specializations of ByteOrderConverter so we can use readBE/writeBE
-    namespace endian {
-        template<>
-        struct ByteOrderConverter<OID::Increment> {
-            inline static OID::Increment nativeToBig(OID::Increment i) {
-// TODO make cleaner with export macros
-#if MONGO_BYTE_ORDER == 1234  // little endian
-                std::swap(i._inc[0], i._inc[2]);
-#endif
-                return i;
-            }
-            
-            inline static OID::Increment bigToNative(OID::Increment i) {
-#if MONGO_BYTE_ORDER == 1234  // little endian
-                std::swap(i._inc[0], i._inc[2]);
-#endif
-                return i;
-            }
-        };
-    }
-
-    OID::Increment OID::Increment::nextIncrement() {
+    OID::Increment OID::Increment::next() {
         uint64_t nextCtr = counter->fetchAndAdd(1);
         OID::Increment incr;
 
-        // On big endian we need to shift since we want the least
-        // significant bits.
-#if MONGO_BYTE_ORDER == 4321
-        nextCtr <<= 8 * (sizeof(uint64_t) - kIncrementSize);
-#endif
+        incr._bytes[0] = uint8_t(nextCtr >> 16);
+        incr._bytes[1] = uint8_t(nextCtr >> 8);
+        incr._bytes[2] = uint8_t(nextCtr);
 
-        // Copy the lowest 3 bytes
-        std::memcpy(incr._inc, &nextCtr, kIncrementSize);
         return incr;
     }
 
-    OID::Unique OID::Unique::genUnique() {
-        int64_t rand = entropy->nextInt64();
-        OID::Unique u;
-        std::memcpy(u._unique, &rand, kUniqueSize);
+    OID::InstanceUnique OID::InstanceUnique::generate(SecureRandom& entropy) {
+        int64_t rand = entropy.nextInt64();
+        OID::InstanceUnique u;
+        std::memcpy(u._bytes, &rand, kInstanceUniqueSize);
         return u;
     }
 
     void OID::setTimestamp(const OID::Timestamp timestamp) {
-        _view.writeBE<OID::Timestamp>(timestamp, kTimestampOffset);
+        view().writeBE<OID::Timestamp>(timestamp, kTimestampOffset);
     }
 
-    void OID::setUnique(const OID::Unique unique) {
+    void OID::setInstanceUnique(const OID::InstanceUnique unique) {
         // Byte order doesn't matter here
-        _view.writeNative<OID::Unique>(unique, kUniqueOffset);
+        view().writeNative<InstanceUnique>(unique, kInstanceUniqueOffset);
     }
 
     void OID::setIncrement(const OID::Increment inc) {
-        _view.writeBE<OID::Increment>(inc, kIncrementOffset);
+        view().writeNative<Increment>(inc, kIncrementOffset);
     }
 
     OID::Timestamp OID::getTimestamp() const {
-        return _view.readBE<Timestamp>(kTimestampOffset);
+        return view().readBE<Timestamp>(kTimestampOffset);
     }
 
-    OID::Unique OID::getUnique() const {
+    OID::InstanceUnique OID::getInstanceUnique() const {
         // Byte order doesn't matter here
-        return _view.readNative<Unique>(kUniqueOffset);
+        return view().readNative<InstanceUnique>(kInstanceUniqueOffset);
     }
 
     OID::Increment OID::getIncrement() const {
-        return _view.readBE<Increment>(kIncrementOffset);
+        return view().readNative<Increment>(kIncrementOffset);
     }
 
     void OID::hash_combine(size_t &seed) const {
@@ -152,17 +124,18 @@ namespace mongo {
     }
 
     std::ostream& operator<<( std::ostream &s, const OID &o ) {
-        s << o.str();
+        s << o.toString();
         return s;
     }
 
     void OID::regenMachineId() {
-        _machineUnique = Unique::genUnique();
+        boost::scoped_ptr<SecureRandom> entropy(SecureRandom::create());
+        _instanceUnique = InstanceUnique::generate(*entropy.get());
     }
 
     unsigned OID::getMachineId() {
         uint32_t ret = 0;
-        std::memcpy(&ret, _machineUnique._unique, sizeof(uint32_t));
+        std::memcpy(&ret, _instanceUnique._bytes, sizeof(uint32_t));
         return ret;
     }
 
@@ -173,8 +146,8 @@ namespace mongo {
     void OID::init() {
         // each set* method handles endianness
         setTimestamp(time(0));
-        setUnique(_machineUnique);
-        setIncrement(Increment::nextIncrement());
+        setInstanceUnique(_instanceUnique);
+        setIncrement(Increment::next());
     }
 
     void OID::init( const std::string& s ) {
@@ -189,7 +162,8 @@ namespace mongo {
     void OID::init(Date_t date, bool max) {
         setTimestamp(uint32_t(date / 1000));
         uint64_t rest = max ? std::numeric_limits<uint64_t>::max() : 0u;
-        std::memcpy(_view.view(kUniqueOffset), &rest, kUniqueSize + kIncrementSize);
+        std::memcpy(view().view(kInstanceUniqueOffset), &rest,
+                    kInstanceUniqueSize + kIncrementSize);
     }
 
     time_t OID::asTimeT() {
