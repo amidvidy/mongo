@@ -33,6 +33,23 @@ namespace {
 
     using mongo::OID;
 
+    TEST(Equals, Simple) {
+        OID o1 = OID::gen();
+
+        ASSERT_EQUALS(o1, o1);
+        ASSERT_TRUE(o1 == o1);
+        ASSERT_TRUE(o1.compare(o1) == 0);
+    }
+
+    TEST(NotEquals, Simple) {
+        OID o1 = OID::gen();
+        OID o2 = OID::gen();
+
+        ASSERT_FALSE(o1 == o2);
+        ASSERT_TRUE(o1 != o2);
+        ASSERT_TRUE(o1.compare(o2) != 0);
+    }
+
     TEST(Increasing, Simple) {
         OID o1 = OID::gen();
         OID o2 = OID::gen();
@@ -93,7 +110,7 @@ namespace {
             0x11u, 0x22u, 0x33u                // increment is 1122867
         };
 
-        OID o1 = OID::fromBuf(OIDbytes);
+        OID o1 = OID::from(OIDbytes);
 
         ASSERT_EQUALS(o1.getTimestamp(), -559038737);
         OID::InstanceUnique u = o1.getInstanceUnique();
@@ -110,5 +127,20 @@ namespace {
               uint32_t(i._bytes[2]);
 
         ASSERT_EQUALS(1122867u, incr);
+    }
+
+    TEST(Basic, FromString) {
+
+        std::string oidStr("541b1a00e8a23afa832b218e");
+        uint8_t oidBytes[] = {0x54u, 0x1Bu, 0x1Au, 0x00u,
+                            0xE8u, 0xA2u, 0x3Au, 0xFAu,
+                            0x83u, 0x2Bu, 0x21u, 0x8Eu};
+
+        ASSERT_EQUALS(OID(oidStr), OID::from(oidBytes));
+    }
+
+    TEST(Basic, FromStringToString) {
+        std::string fromStr("541b1a00e8a23afa832b218e");
+        ASSERT_EQUALS(OID(fromStr).toString(), fromStr);
     }
 }
