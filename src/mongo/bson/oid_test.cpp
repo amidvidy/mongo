@@ -26,6 +26,7 @@
  */
 
 #include "mongo/bson/oid.h"
+
 #include "mongo/platform/endian.h"
 #include "mongo/unittest/unittest.h"
 
@@ -68,12 +69,12 @@ namespace {
         OID::justForked();
         OID o2 = OID::gen();
 
-        ASSERT_TRUE(std::memcmp(o1.getInstanceUnique()._bytes, o2.getInstanceUnique()._bytes,
+        ASSERT_TRUE(std::memcmp(o1.getInstanceUnique().bytes, o2.getInstanceUnique().bytes,
                                 OID::kInstanceUniqueSize) != 0);
     }
 
     TEST(TimestampIsBigEndian, Endianness) {
-        OID o1; //zeroed
+        OID o1;  // zeroed
         OID::Timestamp ts = 123;
         o1.setTimestamp(ts);
 
@@ -86,10 +87,10 @@ namespace {
     TEST(IncrementIsBigEndian, Endianness) {
         OID o1; // zeroed
         OID::Increment incr;
-        //Increment is a 3 byte counter big endian
-        incr._bytes[0] = 0xBEu;
-        incr._bytes[1] = 0xADu;
-        incr._bytes[2] = 0xDEu;
+        // Increment is a 3 byte counter big endian
+        incr.bytes[0] = 0xBEu;
+        incr.bytes[1] = 0xADu;
+        incr.bytes[2] = 0xDEu;
 
         o1.setIncrement(incr);
 
@@ -115,16 +116,16 @@ namespace {
         ASSERT_EQUALS(o1.getTimestamp(), -559038737);
         OID::InstanceUnique u = o1.getInstanceUnique();
         for (std::size_t i = 0; i < OID::kInstanceUniqueSize; ++i) {
-            ASSERT_EQUALS(u._bytes[i], 0x00u);
+            ASSERT_EQUALS(u.bytes[i], 0x00u);
         }
         OID::Increment i = o1.getIncrement();
 
         // construct a uint32_t from increment
-        // recall that i is a 3 byte integer, now in native endianness
+        // recall that i is a big-endian 3 byte unsigned integer
         uint32_t incr =
-            ((uint32_t(i._bytes[0]) << 16)) |
-            ((uint32_t(i._bytes[1]) << 8))  |
-              uint32_t(i._bytes[2]);
+            ((uint32_t(i.bytes[0]) << 16)) |
+            ((uint32_t(i.bytes[1]) << 8))  |
+              uint32_t(i.bytes[2]);
 
         ASSERT_EQUALS(1122867u, incr);
     }

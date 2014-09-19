@@ -102,12 +102,11 @@ namespace mongo {
 
         int compare( const OID& other ) const { return memcmp( _data , other._data , kOIDSize ); }
 
-
         /** @return the object ID output as 24 hex digits */
         std::string toString() const { return toHexLower(_data, kOIDSize); }
         /** @return the random/sequential part of the object ID as 6 hex digits */
         std::string toIncString() const {
-            return toHexLower(getIncrement()._bytes, kIncrementSize);
+            return toHexLower(getIncrement().bytes, kIncrementSize);
         }
 
         static OID gen() {
@@ -145,7 +144,7 @@ namespace mongo {
 
         // True iff the OID is not empty
         bool isSet() const {
-            return compare(OID());
+            return compare(OID()) == 0;
         }
 
         /**
@@ -157,25 +156,22 @@ namespace mongo {
         /** call this after a fork to update the process id */
         static void justForked();
 
-        static unsigned getMachineId();  // features command uses
+        static unsigned getMachineId();  // used by the 'features' command
         static void regenMachineId();
-
-        // Internal stuff, public to ease testing.
 
         // Timestamp is 4 bytes so we just use int32_t
         typedef int32_t Timestamp;
 
         // Wrappers so we can return stuff by value.
-        class InstanceUnique {
-        public:
+        struct InstanceUnique {
             static InstanceUnique generate(SecureRandom& entropy);
-            uint8_t _bytes[kInstanceUniqueSize];
+            uint8_t bytes[kInstanceUniqueSize];
         };
 
-        class Increment {
+        struct Increment {
         public:
             static Increment next();
-            uint8_t _bytes[kIncrementSize];
+            uint8_t bytes[kIncrementSize];
         };
 
         void setTimestamp(Timestamp timestamp);
@@ -205,8 +201,11 @@ namespace mongo {
         char _data[kOIDSize];
     };
 
-    std::ostream& operator<<( std::ostream &s, const OID &o );
-    inline StringBuilder& operator<< (StringBuilder& s, const OID& o) {
+    inline std::ostream& operator<<(std::ostream &s, const OID &o) {
+        return (s << o.toString());
+    }
+
+    inline StringBuilder& operator<<(StringBuilder& s, const OID& o) {
         return (s << o.toString());
     }
 
@@ -229,4 +228,4 @@ namespace mongo {
     inline bool operator<(const OID& lhs, const OID& rhs) { return lhs.compare(rhs) < 0; }
     inline bool operator<=(const OID& lhs, const OID& rhs) { return lhs.compare(rhs) <= 0; }
 
-} // namespace mongo
+}  // namespace mongo

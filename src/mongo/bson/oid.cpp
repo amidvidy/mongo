@@ -40,8 +40,6 @@
 #include "mongo/platform/process_id.h"
 #include "mongo/platform/random.h"
 
-#define verify MONGO_verify
-
 namespace mongo {
 
     namespace {
@@ -54,13 +52,12 @@ namespace mongo {
                                              OID::kInstanceUniqueSize;  // 9
 
         OID::InstanceUnique _instanceUnique;
-    }
+    }  // namespace
 
     MONGO_INITIALIZER_GENERAL(OIDGeneration, MONGO_NO_PREREQUISITES, ("default"))
         (InitializerContext* context) {
         boost::scoped_ptr<SecureRandom> entropy(SecureRandom::create());
         counter.reset(new AtomicUInt32(uint32_t(entropy->nextInt64())));
-
         _instanceUnique = OID::InstanceUnique::generate(*entropy.get());
         return Status::OK();
     }
@@ -69,9 +66,9 @@ namespace mongo {
         uint64_t nextCtr = counter->fetchAndAdd(1);
         OID::Increment incr;
 
-        incr._bytes[0] = uint8_t(nextCtr >> 16);
-        incr._bytes[1] = uint8_t(nextCtr >> 8);
-        incr._bytes[2] = uint8_t(nextCtr);
+        incr.bytes[0] = uint8_t(nextCtr >> 16);
+        incr.bytes[1] = uint8_t(nextCtr >> 8);
+        incr.bytes[2] = uint8_t(nextCtr);
 
         return incr;
     }
@@ -79,7 +76,7 @@ namespace mongo {
     OID::InstanceUnique OID::InstanceUnique::generate(SecureRandom& entropy) {
         int64_t rand = entropy.nextInt64();
         OID::InstanceUnique u;
-        std::memcpy(u._bytes, &rand, kInstanceUniqueSize);
+        std::memcpy(u.bytes, &rand, kInstanceUniqueSize);
         return u;
     }
 
@@ -111,7 +108,7 @@ namespace mongo {
 
     void OID::hash_combine(size_t &seed) const {
         uint32_t v;
-        for (int i = 0; i < kOIDSize; i += sizeof(uint32_t)) {
+        for (int i = 0; i != kOIDSize; i += sizeof(uint32_t)) {
             memcpy(&v, _data + i, sizeof(int32_t));
             boost::hash_combine(seed, v);
         }
@@ -123,11 +120,6 @@ namespace mongo {
         return seed;
     }
 
-    std::ostream& operator<<( std::ostream &s, const OID &o ) {
-        s << o.toString();
-        return s;
-    }
-
     void OID::regenMachineId() {
         boost::scoped_ptr<SecureRandom> entropy(SecureRandom::create());
         _instanceUnique = InstanceUnique::generate(*entropy.get());
@@ -135,7 +127,7 @@ namespace mongo {
 
     unsigned OID::getMachineId() {
         uint32_t ret = 0;
-        std::memcpy(&ret, _instanceUnique._bytes, sizeof(uint32_t));
+        std::memcpy(&ret, _instanceUnique.bytes, sizeof(uint32_t));
         return ret;
     }
 
@@ -169,4 +161,4 @@ namespace mongo {
     time_t OID::asTimeT() {
         return getTimestamp();
     }
-}
+}  // namespace mongo
