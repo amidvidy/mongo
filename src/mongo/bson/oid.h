@@ -144,7 +144,7 @@ namespace mongo {
 
         // True iff the OID is not empty
         bool isSet() const {
-            return compare(OID()) == 0;
+            return compare(OID()) != 0;
         }
 
         /**
