@@ -34,6 +34,7 @@
 
 #include "mongo/db/jsobj.h"
 #include "mongo/db/pipeline/document.h"
+#include "mongo/util/hex.h"
 #include "mongo/util/mongoutils/str.h"
 
 namespace mongo {

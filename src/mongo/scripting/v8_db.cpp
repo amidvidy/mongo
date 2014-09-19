@@ -42,6 +42,7 @@
 #include "mongo/scripting/v8_utils.h"
 #include "mongo/util/assert_util.h"
 #include "mongo/util/base64.h"
+#include "mongo/util/hex.h"
 #include "mongo/util/text.h"
 
 using namespace std;
