@@ -121,7 +121,7 @@ namespace {
 
     void OID::regenMachineId() {
         boost::scoped_ptr<SecureRandom> entropy(SecureRandom::create());
-        _instanceUnique = InstanceUnique::generate(*entropy[);
+        _instanceUnique = InstanceUnique::generate(*entropy);
     }
 
     unsigned OID::getMachineId() {

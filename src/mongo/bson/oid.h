@@ -32,6 +32,8 @@
 #include <string>
 
 #include "mongo/base/data_view.h"
+#include "mongo/util/time_support.h"
+#include "mongo/bson/util/builder.h"
 
 namespace mongo {
     class SecureRandom;
@@ -59,7 +61,7 @@ namespace mongo {
      * since it is never interpreted as a multi-byte value.
      *
      * The counter is a big endian 3 byte unsigned integer.
-     * 
+     *
      * Note: The timestamp and counter are big endian (in contrast to the rest of BSON) because
      * we use memcmp to order OIDs, and we want to ensure an increasing order.
      *
