@@ -251,7 +251,7 @@ namespace mongo {
 
         /** Retrieve the object ID stored in the object.
             You must ensure the element is of type jstOID first. */
-        const mongo::OID __oid() const {
+        mongo::OID __oid() const {
             return OID::from(value());
         }
 
