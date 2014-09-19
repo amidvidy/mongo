@@ -39,7 +39,7 @@ namespace {
 
         ASSERT_EQUALS(o1, o1);
         ASSERT_TRUE(o1 == o1);
-        ASSERT_TRUE(o1.compare(o1) == 0);
+        ASSERT_EQUALS(o1.compare(o1), 0);
     }
 
     TEST(NotEquals, Simple) {
@@ -48,7 +48,7 @@ namespace {
 
         ASSERT_FALSE(o1 == o2);
         ASSERT_TRUE(o1 != o2);
-        ASSERT_TRUE(o1.compare(o2) != 0);
+        ASSERT_NE(o1.compare(o2), 0);
     }
 
     TEST(Increasing, Simple) {
