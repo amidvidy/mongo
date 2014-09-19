@@ -37,28 +37,27 @@
 #include "mongo/base/init.h"
 #include "mongo/bson/bsonobjbuilder.h"
 #include "mongo/platform/atomic_word.h"
-#include "mongo/platform/process_id.h"
 #include "mongo/platform/random.h"
+#include "mongo/util/hex.h"
 
 namespace mongo {
 
-    namespace {
-        boost::scoped_ptr<AtomicUInt32> counter;
+namespace {
+    boost::scoped_ptr<AtomicUInt32> counter;
 
-        const std::size_t kTimestampOffset = 0;
-        const std::size_t kInstanceUniqueOffset = kTimestampOffset +
-                                                  OID::kTimestampSize;  // 4
-        const std::size_t kIncrementOffset = kInstanceUniqueOffset +
-                                             OID::kInstanceUniqueSize;  // 9
-
-        OID::InstanceUnique _instanceUnique;
-    }  // namespace
+    const std::size_t kTimestampOffset = 0;
+    const std::size_t kInstanceUniqueOffset = kTimestampOffset +
+                                              OID::kTimestampSize;
+    const std::size_t kIncrementOffset = kInstanceUniqueOffset +
+                                         OID::kInstanceUniqueSize;
+    OID::InstanceUnique _instanceUnique;
+}  // namespace
 
     MONGO_INITIALIZER_GENERAL(OIDGeneration, MONGO_NO_PREREQUISITES, ("default"))
         (InitializerContext* context) {
         boost::scoped_ptr<SecureRandom> entropy(SecureRandom::create());
         counter.reset(new AtomicUInt32(uint32_t(entropy->nextInt64())));
-        _instanceUnique = OID::InstanceUnique::generate(*entropy.get());
+        _instanceUnique = OID::InstanceUnique::generate(*entropy);
         return Status::OK();
     }
 
@@ -109,7 +108,7 @@ namespace mongo {
     void OID::hash_combine(size_t &seed) const {
         uint32_t v;
         for (int i = 0; i != kOIDSize; i += sizeof(uint32_t)) {
-            memcpy(&v, _data + i, sizeof(int32_t));
+            memcpy(&v, _data + i, sizeof(uint32_t));
             boost::hash_combine(seed, v);
         }
     }
@@ -122,7 +121,7 @@ namespace mongo {
 
     void OID::regenMachineId() {
         boost::scoped_ptr<SecureRandom> entropy(SecureRandom::create());
-        _instanceUnique = InstanceUnique::generate(*entropy.get());
+        _instanceUnique = InstanceUnique::generate(*entropy[);
     }
 
     unsigned OID::getMachineId() {
@@ -161,4 +160,13 @@ namespace mongo {
     time_t OID::asTimeT() {
         return getTimestamp();
     }
+
+    std::string OID::toString() const {
+        return toHexLower(_data, kOIDSize);
+    }
+
+    std::string OID::toIncString() const {
+        return toHexLower(getIncrement().bytes, kIncrementSize);
+    }
+
 }  // namespace mongo

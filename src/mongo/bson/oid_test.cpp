@@ -48,7 +48,7 @@ namespace {
 
         ASSERT_FALSE(o1 == o2);
         ASSERT_TRUE(o1 != o2);
-        ASSERT_NE(o1.compare(o2), 0);
+        ASSERT_NOT_EQUALS(o1.compare(o2), 0);
     }
 
     TEST(Increasing, Simple) {

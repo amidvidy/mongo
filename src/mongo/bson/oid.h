@@ -32,12 +32,9 @@
 #include <string>
 
 #include "mongo/base/data_view.h"
-#include "mongo/bson/util/misc.h"
-#include "mongo/platform/endian.h"
-#include "mongo/platform/random.h"
-#include "mongo/util/hex.h"
 
 namespace mongo {
+    class SecureRandom;
 
     /**
      * Object ID type.
@@ -62,6 +59,9 @@ namespace mongo {
      * since it is never interpreted as a multi-byte value.
      *
      * The counter is a big endian 3 byte unsigned integer.
+     * 
+     * Note: The timestamp and counter are big endian (in contrast to the rest of BSON) because
+     * we use memcmp to order OIDs, and we want to ensure an increasing order.
      *
      * Warning: You MUST call OID::justForked() after a fork(). This ensures that each process will
      * generate unique OIDs.
@@ -103,11 +103,9 @@ namespace mongo {
         int compare( const OID& other ) const { return memcmp( _data , other._data , kOIDSize ); }
 
         /** @return the object ID output as 24 hex digits */
-        std::string toString() const { return toHexLower(_data, kOIDSize); }
+        std::string toString() const;
         /** @return the random/sequential part of the object ID as 6 hex digits */
-        std::string toIncString() const {
-            return toHexLower(getIncrement().bytes, kIncrementSize);
-        }
+        std::string toIncString() const;
 
         static OID gen() {
             OID o((no_initialize_tag()));
@@ -197,7 +195,6 @@ namespace mongo {
         struct no_initialize_tag {};
         explicit OID(no_initialize_tag) {}
 
-        char _garbage[11];
         char _data[kOIDSize];
     };
 
