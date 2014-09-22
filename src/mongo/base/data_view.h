@@ -31,7 +31,8 @@
 
 #include "mongo/platform/endian.h"
 
-#if __cplusplus >= 201103L
+// Not all C++11 enabled compilers have type properties
+#if MONGO_HAVE_IS_TRIVIALLY_COPYABLE
 #include <type_traits>
 #endif
 
@@ -92,13 +93,12 @@ namespace mongo {
             return const_cast<bytes_type>(ConstDataView::view(offset));
         }
 
-#if __cplusplus >= 201103L
-        template<typename T, typename = typename
-                 std::enable_if<std::is_trivially_copyable<T>::value>::type>
-#else
         template<typename T>
-#endif
         DataView& writeNative(const T& value, std::size_t offset = 0) {
+#if MONGO_HAVE_IS_TRIVIALLY_COPYABLE
+            static_assert(std::is_trivially_copyable<T>::value,
+                          "Type for writeNative must be trivial");
+#endif
             std::memcpy(view(offset), &value, sizeof(value));
             return *this;
         }
