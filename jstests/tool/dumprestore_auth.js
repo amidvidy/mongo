@@ -16,13 +16,7 @@ adminDB.createUser({user: 'restore', pwd: 'password', roles: ['restore']});
 var testUserAdmin = c.getDB().getSiblingDB(dbName);
 var backupActions = ["find","listCollections", "listIndexes"];
 testUserAdmin.createRole({role: "backupFoo",
-   privileges: [{resource: {db: dbName, collection: "foo"}, actions:backupActions},
-                {resource: {db: dbName, collection: "system.indexes"},
-                 actions: backupActions},
-                {resource: {db: dbName, collection: "" },
-                 actions: backupActions},
-                {resource: {db: dbName, collection: "system.namespaces"},
-                 actions: backupActions}],
+   privileges: [{resource: {db: dbName, collection: "foo"}, actions:backupActions}],
    roles: []});
 testUserAdmin.createUser({user: 'backupFoo', pwd: 'password', roles: ['backupFoo']});
 
@@ -30,30 +24,22 @@ var restoreActions = ["collMod", "createCollection","createIndex","dropCollectio
 var restoreActionsFind = restoreActions;
 restoreActionsFind.push("find");
 testUserAdmin.createRole({role: "restoreChester",
-       privileges: [{resource: {db: dbName, collection: "chester"}, actions: restoreActions},
-                {resource: {db: dbName, collection: "system.indexes"},
-                 actions: restoreActions},
-                {resource: {db: dbName, collection: "system.namespaces"},
-                 actions: restoreActionsFind}],
+       privileges: [{resource: {db: dbName, collection: "chester"}, actions: restoreActions}],
        roles: []});
 testUserAdmin.createRole({role: "restoreFoo",
-       privileges: [{resource: {db: dbName, collection: "foo"}, actions:restoreActions},
-                {resource: {db: dbName, collection: "system.indexes"},
-                 actions: restoreActions},
-                {resource: {db: dbName, collection: "system.namespaces"},
-                 actions: restoreActionsFind}],
+       privileges: [{resource: {db: dbName, collection: "foo"}, actions:restoreActions}],
        roles: []});
 testUserAdmin.createUser({user: 'restoreChester', pwd: 'password', roles: ['restoreChester']});
 testUserAdmin.createUser({user: 'restoreFoo', pwd: 'password', roles: ['restoreFoo']});
 
-var sysUsers = adminDB.system.users.count();
+var sysUsers = adminDB.getUsers().length;
 assert.eq(0 , c.count() , "setup1");
 c.save({ a : 22 });
 assert.eq(1 , c.count() , "setup2");
 
 assert.commandWorked(c.runCommand("collMod", {usePowerOf2Sizes: false}));
-assert.eq(0, c.getDB().system.namespaces.findOne(
-{name: c.getFullName()}).options.flags, "find namespaces 1");
+assert.eq(0, c.getDB().runCommand({'listCollections': 1,
+                                   'filter': {name: c.getName()}}).collections[0].options.flags, "find namespaces 1");
 
 t.runTool("dump" , "--out" , t.ext, "--username", "backup", "--password", "password");
 
@@ -69,9 +55,10 @@ t.runTool("restore" , "--dir" , t.ext, "--username", "restore", "--password", "p
 assert.soon("c.findOne()" , "no data after sleep");
 assert.eq(1 , c.count() , "after restore 2");
 assert.eq(22 , c.findOne().a , "after restore 2");
-assert.eq(0, c.getDB().system.namespaces.findOne(
-{name: c.getFullName()}).options.flags, "find namespaces 2");
-assert.eq(sysUsers, adminDB.system.users.count());
+
+assert.eq(0, c.getDB().runCommand({'listCollections': 1,
+                                   'filter': {name: c.getName()}}).collections[0].options.flags, "find namespaces 2");
+assert.eq(sysUsers, adminDB.getUsers().length);
 
 // Ddump & restore DB/colection with user defined roles
 t.runTool("dump" , "--out" , t.ext, "--username", "backupFoo", "--password", "password",
@@ -90,8 +77,8 @@ t.runTool("restore" , "--username", "restoreFoo", "--password", "password",
 assert.soon("c.findOne()" , "no data after sleep");
 assert.eq(1 , c.count() , "after restore 3");
 assert.eq(22 , c.findOne().a , "after restore 3");
-assert.eq(0, c.getDB().system.namespaces.findOne(
-{name: c.getFullName()}).options.flags, "find namespaces 3");
-assert.eq(sysUsers, adminDB.system.users.count());
+assert.eq(0, c.getDB().runCommand({'listCollections': 1,
+                                   'filter': {name: c.getName()}}).collections[0].options.flags, "find namespaces 3");
+assert.eq(sysUsers, adminDB.getUsers().length);
 
 t.stop();
