@@ -2042,11 +2042,25 @@ def doConfigure(myenv):
         context.Result(ret)
         return ret
 
+    def CheckStrnlen(context):
+        test_body = """
+        #include <cstring>
+        int main(int argc, char **argv) {
+            ::strnlen("foobar", 2);
+            return 0;
+        }
+        """
+        context.Message('Checking for strnlen(3)... ')
+        ret = context.TryCompile(textwrap.dedent(test_body), '.cpp')
+        context.Result(ret)
+        return ret
+
     conf = Configure(myenv, help=False, custom_tests = {
         'CheckCXX11Atomics': CheckCXX11Atomics,
         'CheckGCCAtomicBuiltins': CheckGCCAtomicBuiltins,
         'CheckGCCSyncBuiltins': CheckGCCSyncBuiltins,
         'CheckCXX11IsTriviallyCopyable': CheckCXX11IsTriviallyCopyable,
+        'CheckStrnlen': CheckStrnlen,
     })
 
     # Figure out what atomics mode to use by way of the tests defined above.
@@ -2079,6 +2093,9 @@ def doConfigure(myenv):
 
     if (cxx11_mode == "on") and conf.CheckCXX11IsTriviallyCopyable():
         conf.env.Append(CPPDEFINES=['MONGO_HAVE_STD_IS_TRIVIALLY_COPYABLE'])
+
+    if conf.CheckStrnlen():
+        conf.env.Append(CPPDEFINES=['MONGO_HAVE_STRNLEN'])
 
     myenv = conf.Finish()
 
