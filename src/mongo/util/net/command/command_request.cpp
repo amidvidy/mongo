@@ -145,4 +145,20 @@ namespace mongo {
         _commandArgs = parsedCommandArgs.getValue();
     }
 
-}
+    StringData CommandRequest::getDatabase() const {
+        return _database;
+    }
+
+    StringData CommandRequest::getCommandName() const {
+        return _commandName;
+    }
+
+    const BSONObj& CommandRequest::getMetadata() const {
+        return _metadata;
+    }
+
+    const BSONObj& CommandRequest::getCommandArgs() const {
+        return _commandArgs;
+    }
+
+}  // namespace mongo

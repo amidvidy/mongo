@@ -26,9 +26,57 @@
  * then also delete it in the license file.
  */
 
-#include "mongo/util/net/command_request.h"
+#include "mongo/util/net/command/command_request.h"
 
+#include <iterator>
+#include <string>
+#include <vector>
+
+#include "mongo/bson/bsonobjbuilder.h"
 #include "mongo/unittest/unittest.h"
+#include "mongo/util/net/message.h"
 
 namespace {
-}
+
+    using namespace mongo;
+
+    TEST(CommandRequest, ParseRequiredFields) {
+        std::vector<char> opCommandData;
+
+        auto commandName = std::string{"abababa"};
+        auto database = std::string{"ookokokokok"};
+        
+        BSONObjBuilder metadataBob{};
+        metadataBob.append("foo", "bar");
+        auto metadata = metadataBob.done();
+        
+        BSONObjBuilder commandArgsBob{};
+        commandArgsBob.append("baz", "garply");
+        auto commandArgs = commandArgsBob.done();
+
+        using std::begin;
+        using std::end;
+
+        // write database chars + null terminator.
+        opCommandData.insert(end(opCommandData), begin(database), end(database));
+        opCommandData.push_back('\0');
+        // write command name chars + null terminator.
+        opCommandData.insert(end(opCommandData), begin(commandName), end(commandName));
+        opCommandData.push_back('\0');
+        // write metadata
+        opCommandData.insert(end(opCommandData), metadata.objdata(),
+                             metadata.objdata() + metadata.objsize());
+        // write commandArgs
+        opCommandData.insert(end(opCommandData), commandArgs.objdata(),
+                             commandArgs.objdata() + commandArgs.objsize());
+        Message toSend;
+        toSend.setData(dbCommand, opCommandData.data(), opCommandData.size());
+
+        CommandRequest opCmd{toSend};
+
+        ASSERT_EQUALS(opCmd.getCommandName(), commandName);
+        ASSERT_EQUALS(opCmd.getDatabase(), database);
+        ASSERT_EQUALS(opCmd.getMetadata(), metadata);
+        ASSERT_EQUALS(opCmd.getCommandArgs(), commandArgs);
+    }
+}  // namespace
