@@ -45,11 +45,11 @@ namespace {
 
         auto commandName = std::string{"abababa"};
         auto database = std::string{"ookokokokok"};
-        
+
         BSONObjBuilder metadataBob{};
         metadataBob.append("foo", "bar");
         auto metadata = metadataBob.done();
-        
+
         BSONObjBuilder commandArgsBob{};
         commandArgsBob.append("baz", "garply");
         auto commandArgs = commandArgsBob.done();
