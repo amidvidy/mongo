@@ -34,25 +34,23 @@
 
 namespace mongo {
 
-    // An immutable view of an OP_COMMAND message.
-    class CommandRequest {
+    // An immutable view of an OP_COMMANDREPLY message.
+    class CommandReply {
     public:
-        // Construct a CommandRequest from a Message.
-        // Underlying message MUST outlive the CommandRequest.
+        // Construct a CommandReply from a Message.
+        // Underlying message MUST outlive the CommandReply.
 
-        // Required fields are parsed eagerly, inputDocs are parsed lazily.
+        // Required fields are parsed eagerly, outputDocs are parsed lazily.
         explicit CommandRequest(const Message& message);
 
         // TODO: would this be useful?
         //static StatusWith<CommandRequest> parse(const Message& message);
 
-        StringData getDatabase() const;
-        StringData getCommandName() const;
         const BSONObj& getMetadata() const;
-        const BSONObj& getCommandArgs() const;
+        const BSONObj& getCommandResponse() const;
 
-        const
-        // TODO: decide interface
+        // TODO: decide interface for output docs
+
         const Message& getMessage();
     private:
         const Message& _message;
@@ -61,9 +59,6 @@ namespace mongo {
         StringData _commandName;
         BSONObj _metadata;
         BSONObj _commandArgs;
-    };
-
-    class CommandRequest::const_iterator {
     };
 
     /*

@@ -35,8 +35,8 @@
 #include <utility>
 
 #include "mongo/base/data_cursor.h"
-#include "mongo/base/data_view.h"
 #include "mongo/util/assert_util.h"
+#include "mongo/util/net/command/command_parse_util.h"
 
 namespace mongo {
 
@@ -92,24 +92,6 @@ namespace mongo {
             reader.skip<char>(); // skip null byte
             return StatusWith<StringData>{StringData(string, length.getValue())};
         }
-
-        StatusWith<BSONObj> readBSONObj(ConstDataCursor& reader,
-                                        const ConstDataCursor rangeEnd) {
-            // TODO: handle serverGobalParams.objcheck
-            BSONObj doc(reader.view());
-            // TODO constant ?
-            if (doc.objsize() < 5) {
-                return StatusWith<BSONObj>{ErrorCodes::FailedToParse,
-                                           "BSONObj length too small in OP_COMMAND message"};
-            }
-            if (doc.objsize() > (rangeEnd.view() - reader.view())) {
-                return StatusWith<BSONObj>{ErrorCodes::FailedToParse,
-                                           "BSONObj length too big in OP_COMMAND message"};
-            }
-            reader += doc.objsize();
-            return StatusWith<BSONObj>{doc};
-        }
-
     }  // namespace
 
     CommandRequest::CommandRequest(const Message& message)

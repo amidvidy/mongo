@@ -26,53 +26,27 @@
 *    it in the license file.
 */
 
-#pragma once
+#include "mongo/platform/basic.h"
 
-#include "mongo/base/string_data.h"
-#include "mongo/bson/bsonobj.h"
-#include "mongo/util/net/message.h"
+#include "mongo/util/net/command/command_parse_util.h"
 
 namespace mongo {
 
-    // An immutable view of an OP_COMMAND message.
-    class CommandRequest {
-    public:
-        // Construct a CommandRequest from a Message.
-        // Underlying message MUST outlive the CommandRequest.
+    StatusWith<BSONObj> readBSONObj(ConstDataCursor& reader,
+                                    const ConstDataCursor rangeEnd) {
+        // TODO: handle serverGobalParams.objcheck
+        BSONObj doc(reader.view());
+        // TODO constant ?
+        if (doc.objsize() < 5) {
+            return StatusWith<BSONObj>{ErrorCodes::FailedToParse,
+                                       "BSONObj length too small in OP_COMMAND message"};
+        }
+        if (doc.objsize() > (rangeEnd.view() - reader.view())) {
+            return StatusWith<BSONObj>{ErrorCodes::FailedToParse,
+                                       "BSONObj length too big in OP_COMMAND message"};
+        }
+        reader += doc.objsize();
+        return StatusWith<BSONObj>{doc};
+    }
 
-        // Required fields are parsed eagerly, inputDocs are parsed lazily.
-        explicit CommandRequest(const Message& message);
-
-        // TODO: would this be useful?
-        //static StatusWith<CommandRequest> parse(const Message& message);
-
-        StringData getDatabase() const;
-        StringData getCommandName() const;
-        const BSONObj& getMetadata() const;
-        const BSONObj& getCommandArgs() const;
-
-        const
-        // TODO: decide interface
-        const Message& getMessage();
-    private:
-        const Message& _message;
-
-        StringData _database;
-        StringData _commandName;
-        BSONObj _metadata;
-        BSONObj _commandArgs;
-    };
-
-    class CommandRequest::const_iterator {
-    };
-
-    /*
-    class CommandRequestBuilder {
-        CommandRequestBuilder();
-        CommandRequestBuilder& setDatabase(StringData database);
-        CommandRequestBuilder& setCommandName(StringData commandName);
-        CommandRequestBuilder& setMetadata(
-    };
-    */
-
-}
+}  // namespace mongo
