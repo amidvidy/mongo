@@ -31,7 +31,7 @@
 #include "mongo/util/net/command/command_request.h"
 
 #include <string>
-#include <algorithm>
+
 #include <utility>
 
 #include "mongo/base/data_cursor.h"
@@ -55,43 +55,9 @@ namespace mongo {
         // TODO: the existence of this helper indicates a need for a DataRange,
         // or BoundedDataCursor primitive.
         // returns cursor
-        template<typename T>
-        StatusWith<std::size_t> skipUntil(ConstDataCursor& reader,
-                                          const ConstDataCursor rangeEnd,
-                                          T sentinel,
-                                          std::size_t minValidToSkip,
-                                          std::size_t maxValidToSkip) {
-            // We can stop looking at the end of the range, or the last valid amount
-            // of Ts to skip, whichever comes first.
-            std::size_t maxToSkipOrEnd = std::min(((rangeEnd.view() - reader.view()) / sizeof(T)),
-                                                  maxValidToSkip);
 
-            for (std::size_t skipped = 0; skipped < maxToSkipOrEnd; ++skipped) {
-                if (reader.readNative<T>() == sentinel) {
-                    if (skipped < minValidToSkip) {
-                        return StatusWith<std::size_t>(ErrorCodes::FailedToParse);
-                    }
-                    return StatusWith<std::size_t>(skipped);
-                }
-                reader.skip<T>();
-            }
-            return StatusWith<std::size_t>(ErrorCodes::FailedToParse);
-        }
 
-        StatusWith<StringData> readString(ConstDataCursor& reader,
-                                          const ConstDataCursor rangeEnd,
-                                          std::size_t minLength,
-                                          std::size_t maxLength) {
 
-            const char* string = reader.view();
-            auto length = skipUntil<char>(reader, rangeEnd, '\0', minLength, maxLength);
-            if (!length.getStatus().isOK()) {
-                // TODO: better error message.
-                return StatusWith<StringData>{ErrorCodes::FailedToParse, "Couldn't parse string"};
-            }
-            reader.skip<char>(); // skip null byte
-            return StatusWith<StringData>{StringData(string, length.getValue())};
-        }
     }  // namespace
 
     CommandRequest::CommandRequest(const Message& message)

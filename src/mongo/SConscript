@@ -476,7 +476,8 @@ env.Library('mongocommon', commonFiles,
                      '$BUILD_DIR/third_party/murmurhash3/murmurhash3',
                      '$BUILD_DIR/third_party/shim_boost',
                      '$BUILD_DIR/mongo/util/options_parser/options_parser',
-                     '$BUILD_DIR/mongo/util/net/command/command_request'
+                     '$BUILD_DIR/mongo/util/net/command/command_request',
+                     '$BUILD_DIR/mongo/util/net/command/command_reply',
                      ] +
                      extraCommonLibdeps)
 

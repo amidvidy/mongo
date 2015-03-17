@@ -50,8 +50,6 @@ namespace mongo {
         StringData getCommandName() const;
         const BSONObj& getMetadata() const;
         const BSONObj& getCommandArgs() const;
-
-        const
         // TODO: decide interface
         const Message& getMessage();
     private:
@@ -62,9 +60,10 @@ namespace mongo {
         BSONObj _metadata;
         BSONObj _commandArgs;
     };
-
+    /*
     class CommandRequest::const_iterator {
     };
+    */
 
     /*
     class CommandRequestBuilder {

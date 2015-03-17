@@ -28,41 +28,38 @@
 
 #include "mongo/platform/basic.h"
 
+#include "mongo/util/net/command/command_reply.h"
+
 #include "mongo/util/net/command/command_parse_util.h"
 
 namespace mongo {
 
-    StatusWith<BSONObj> readBSONObj(ConstDataCursor& reader,
-                                    const ConstDataCursor rangeEnd) {
-        // TODO: handle serverGobalParams.objcheck
-        BSONObj doc(reader.view());
-        // TODO constant ?
-        if (doc.objsize() < 5) {
-            return StatusWith<BSONObj>{ErrorCodes::FailedToParse,
-                                       "BSONObj length too small in OP_COMMAND message"};
-        }
-        if (doc.objsize() > (rangeEnd.view() - reader.view())) {
-            return StatusWith<BSONObj>{ErrorCodes::FailedToParse,
-                                       "BSONObj length too big in OP_COMMAND message"};
-        }
-        reader += doc.objsize();
-        return StatusWith<BSONObj>{doc};
+    CommandReply::CommandReply(const Message& message)
+        : _message(message) {
+        char* begin = _message.singleData().data();
+        std::size_t length = _message.singleData().dataLen();
+
+        // TODO: overflow?
+        char* end = begin + length;
+
+        ConstDataCursor reader{begin};
+        const ConstDataCursor rangeEnd{end};
+
+        auto parsedMetadata = readBSONObj(reader, rangeEnd);
+        uassertStatusOK(parsedMetadata.getStatus());
+        _metadata = parsedMetadata.getValue();
+
+        auto parsedCommandArgs = readBSONObj(reader, rangeEnd);
+        uassertStatusOK(parsedCommandArgs.getStatus());
+        _commandReply = parsedCommandArgs.getValue();
     }
 
-    StatusWith<StringData> readString(ConstDataCursor& reader,
-                                      const ConstDataCursor rangeEnd,
-                                      std::size_t minLength,
-                                      std::size_t maxLength) {
+    const BSONObj& CommandReply::getMetadata() const {
+        return _metadata;
+    }
 
-        const char* string = reader.view();
-        auto length = skipUntil<char>(reader, rangeEnd, '\0', minLength, maxLength);
-        if (!length.getStatus().isOK()) {
-            // TODO: better error message.
-            return StatusWith<StringData>{ErrorCodes::FailedToParse,
-                                          "Couldn't parse string"};
-        }
-        reader.skip<char>(); // skip null byte
-        return StatusWith<StringData>{StringData(string, length.getValue())};
+    const BSONObj& CommandReply::getCommandReply() const {
+        return _commandReply;
     }
 
 }  // namespace mongo

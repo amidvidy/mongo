@@ -2,16 +2,33 @@
 
 Import("env")
 
+env.Library('command_parse_util',
+            'command_parse_util.cpp')
+
 env.Library('command_request',
             'command_request.cpp',
             LIBDEPS=[
-                '$BUILD_DIR/mongo/network'
-            ]
-)
+                'command_parse_util',
+                '$BUILD_DIR/mongo/network',
+            ])
+
+# TODO cppunit tests for command_parse_util
+
+env.Library('command_reply',
+            'command_reply.cpp',
+            LIBDEPS=[
+                'command_parse_util',
+                '$BUILD_DIR/mongo/network',
+            ])
 
 env.CppUnitTest('command_request_test',
                 'command_request_test.cpp',
                 LIBDEPS=[
                     'command_request'
-                ]
-)
+                ])
+
+env.CppUnitTest('command_reply_test',
+                'command_reply_test.cpp',
+                LIBDEPS=[
+                    'command_reply'
+                ])

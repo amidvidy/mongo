@@ -41,13 +41,13 @@ namespace mongo {
         // Underlying message MUST outlive the CommandReply.
 
         // Required fields are parsed eagerly, outputDocs are parsed lazily.
-        explicit CommandRequest(const Message& message);
+        explicit CommandReply(const Message& message);
 
         // TODO: would this be useful?
         //static StatusWith<CommandRequest> parse(const Message& message);
 
         const BSONObj& getMetadata() const;
-        const BSONObj& getCommandResponse() const;
+        const BSONObj& getCommandReply() const;
 
         // TODO: decide interface for output docs
 
@@ -55,10 +55,8 @@ namespace mongo {
     private:
         const Message& _message;
 
-        StringData _database;
-        StringData _commandName;
         BSONObj _metadata;
-        BSONObj _commandArgs;
+        BSONObj _commandReply;
     };
 
     /*

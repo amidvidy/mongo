@@ -64,7 +64,8 @@ namespace mongo {
         dbGetMore = 2005,
         dbDelete = 2006,
         dbKillCursors = 2007,
-        dbCommand = 2008
+        dbCommand = 2008,
+        dbCommandReply = 2009,
     };
 
     bool doesOpGetAResponse( int op );
