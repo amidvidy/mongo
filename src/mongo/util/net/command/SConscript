@@ -1,0 +1,12 @@
+# -*- mode: python -*-
+
+Import("env")
+
+env.Library('command_request',
+            'command_request.cpp')
+
+env.CppUnitTest('command_request_test',
+                'command_request_test.cpp',
+                LIBDEPS=[
+                    'command_request'
+                ])

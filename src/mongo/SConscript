@@ -55,7 +55,9 @@ env.SConscript(['base/SConscript',
                 'util/concurrency/SConscript',
                 'util/options_parser/SConscript',
                 'util/cmdline_utils/SConscript',
-                'util/mongoutils/SConscript'])
+                'util/mongoutils/SConscript',
+                'util/net/command/SConscript',
+            ])
 
 def add_exe( v ):
     return "${PROGPREFIX}%s${PROGSUFFIX}" % v
@@ -305,6 +307,7 @@ env.Library('network', [
                      'foundation',
                      'hostandport',
                      'server_options_core',
+                     '$BUILD_DIR/mongo/util/net/command/command_request'
             ])
 
 env.Library(
