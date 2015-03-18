@@ -59,10 +59,10 @@ namespace mongo {
     public:
         const_iterator() = default;
         explicit const_iterator(ConstDataCursor pos, ConstDataCursor rangeEnd); // ??
-        
+
         reference operator*() const;
         pointer operator->() const;
-        
+
         const_iterator& operator++();
         const_iterator operator++(int);
 

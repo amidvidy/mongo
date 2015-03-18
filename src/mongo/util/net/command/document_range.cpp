@@ -70,7 +70,7 @@ namespace mongo {
 
     DocumentRange::const_iterator&
     DocumentRange::const_iterator::operator++() {
-        
+
         invariant(_nextDoc <= _rangeEnd);
 
         if (_nextDoc ==  _rangeEnd) {
@@ -78,7 +78,7 @@ namespace mongo {
         } else {
             auto pos = ConstDataCursor{_nextDoc};
             auto parsedObj = readBSONObj(pos, ConstDataCursor{_rangeEnd});
-        
+
             uassertStatusOK(parsedObj.getStatus());
             _obj = std::move(parsedObj.getValue());
             _nextDoc = std::move(pos.view());
@@ -89,13 +89,13 @@ namespace mongo {
 
     DocumentRange::const_iterator
     DocumentRange::const_iterator::operator++(int) {
-        auto pre = DocumentRange::const_iterator(ConstDataCursor{_nextDoc}, 
+        auto pre = DocumentRange::const_iterator(ConstDataCursor{_nextDoc},
                                                  ConstDataCursor{_rangeEnd});
         operator++();
         return pre;
     }
 
-    bool operator==(const DocumentRange::const_iterator& lhs, 
+    bool operator==(const DocumentRange::const_iterator& lhs,
                     const DocumentRange::const_iterator& rhs) {
         return std::tie(lhs._nextDoc, lhs._rangeEnd, lhs._obj) ==
                std::tie(rhs._nextDoc, rhs._rangeEnd, rhs._obj);

@@ -32,7 +32,9 @@
 #include <string>
 #include <vector>
 
+#include "mongo/base/data_view.h"
 #include "mongo/bson/bsonobjbuilder.h"
+#include "mongo/platform/cstdint.h"
 #include "mongo/unittest/unittest.h"
 #include "mongo/util/net/message.h"
 
@@ -40,16 +42,47 @@ namespace {
 
     using namespace mongo;
 
-    TEST(CommandReply, ParseRequiredFields) {
-        std::vector<char> opCommandReplyData;
-        
-        using std::begin;
-        using std::end;
+    class CommandReplyTest : public mongo::unittest::Test {
+    protected:
+        std::vector<char> _cmdData{};
+        // using unique ptr so we can destroy and replace easily
+        // since message does not have operator= or swap defined...
+        std::unique_ptr<Message> _message{};
 
-        auto writeObj = [&opCommandReplyData](const BSONObj& obj) {
-            opCommandReplyData.insert(end(opCommandReplyData), obj.objdata(),
-                                 obj.objdata() + obj.objsize());
-        };
+        virtual void setUp() override {
+            _message = std::unique_ptr<Message>(new Message());
+        }
+
+        virtual void tearDown() override {
+            _message.release();
+            _cmdData.clear();
+        }
+
+        void writeObj(const BSONObj& obj) {
+            using std::begin;
+            using std::end;
+            _cmdData.insert(end(_cmdData), obj.objdata(),
+                           obj.objdata() + obj.objsize());
+        }
+
+        void writeObj(const BSONObj& obj, std::size_t length) {
+            using std::begin;
+            using std::end;
+            _cmdData.insert(end(_cmdData), obj.objdata(),
+                            obj.objdata() + length);
+        }
+
+        const Message& buildMessage() {
+            _cmdData.shrink_to_fit();
+            _message->setData(dbCommandReply,
+                              _cmdData.data(),
+                              _cmdData.size());
+            return *_message;
+        }
+
+    };
+
+    TEST_F(CommandReplyTest, ParseAllFields) {
 
         BSONObjBuilder metadataBob{};
         metadataBob.append("foo", "bar");
@@ -71,12 +104,7 @@ namespace {
         auto outputDoc2 = outputDoc2Bob.done();
         writeObj(outputDoc2);
 
-        Message toSend;
-        toSend.setData(dbCommandReply,
-                       opCommandReplyData.data(),
-                       opCommandReplyData.size());
-
-        CommandReply opCmdReply{toSend};
+        CommandReply opCmdReply{buildMessage()};
 
         ASSERT_EQUALS(opCmdReply.getMetadata(), metadata);
         ASSERT_EQUALS(opCmdReply.getCommandReply(), commandReply);
@@ -91,7 +119,56 @@ namespace {
         ASSERT_EQUALS(*outputDocRangeIter, outputDoc2);
         ASSERT_FALSE(outputDocRangeIter == outputDocRange.end());
         ++outputDocRangeIter;
-        
+
         ASSERT_TRUE(outputDocRangeIter == outputDocRange.end());
     }
-}  // namespace
+
+    TEST_F(CommandReplyTest, EmptyMessageThrows) {
+        ASSERT_THROWS(CommandReply{buildMessage()}, UserException);
+    }
+
+    TEST_F(CommandReplyTest, MetadataOnlyThrows) {
+        BSONObjBuilder metadataBob{};
+        metadataBob.append("foo", "bar");
+        auto metadata = metadataBob.done();
+        writeObj(metadata);
+
+        ASSERT_THROWS(CommandReply{buildMessage()}, UserException);
+    }
+
+    TEST_F(CommandReplyTest, MetadataInvalidLengthThrows) {
+        BSONObjBuilder metadataBob{};
+        metadataBob.append("foo", "bar");
+        auto metadata = metadataBob.done();
+        auto trueSize = metadata.objsize();
+        // write a super long length field
+        DataView(const_cast<char*>(metadata.objdata())).writeLE<int32_t>(100000);
+        writeObj(metadata, trueSize);
+        // write a valid commandReply
+        BSONObjBuilder commandReplyBob{};
+        commandReplyBob.append("baz", "garply");
+        auto commandReply = commandReplyBob.done();
+        writeObj(commandReply);
+
+        ASSERT_THROWS(CommandReply{buildMessage()}, UserException);
+    }
+
+    TEST_F(CommandReplyTest, CommandReplyInvalidLengthThrows) {
+        BSONObjBuilder metadataBob{};
+        metadataBob.append("foo", "bar");
+        auto metadata = metadataBob.done();
+        // write a valid metadata object
+        writeObj(metadata);
+        
+        BSONObjBuilder commandReplyBob{};
+        commandReplyBob.append("baz", "garply");
+        auto commandReply = commandReplyBob.done();
+        auto trueSize = commandReply.objsize();
+        // write a super long length field
+        DataView(const_cast<char*>(commandReply.objdata())).writeLE<int32_t>(100000);
+        writeObj(commandReply, trueSize);
+
+        ASSERT_THROWS(CommandReply{buildMessage()}, UserException);
+    }
+
+}  

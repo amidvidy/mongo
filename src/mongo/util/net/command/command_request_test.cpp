@@ -65,7 +65,7 @@ namespace {
         BSONObjBuilder metadataBob{};
         metadataBob.append("foo", "bar");
         auto metadata = metadataBob.done();
-        writeObj(metadata);        
+        writeObj(metadata);
 
         BSONObjBuilder commandArgsBob{};
         commandArgsBob.append("baz", "garply");
@@ -102,7 +102,7 @@ namespace {
         ASSERT_EQUALS(*inputDocRangeIter, inputDoc2);
         ASSERT_FALSE(inputDocRangeIter == inputDocRange.end());
         ++inputDocRangeIter;
-        
+
         ASSERT_TRUE(inputDocRangeIter == inputDocRange.end());
     }
 }  // namespace
