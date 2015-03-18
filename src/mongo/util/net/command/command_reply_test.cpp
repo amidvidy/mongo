@@ -54,7 +54,6 @@ namespace {
         }
 
         virtual void tearDown() override {
-            _message.release();
             _cmdData.clear();
         }
 
