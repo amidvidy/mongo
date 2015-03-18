@@ -49,15 +49,6 @@ namespace mongo {
         std::size_t kMinCommandNameLength = 1;
         std::size_t kMaxCommandNameLength = 200;
 
-        // T must satisfy EqualityComparable concept
-        // passing T by value because this will only be used with primitives.
-
-        // TODO: the existence of this helper indicates a need for a DataRange,
-        // or BoundedDataCursor primitive.
-        // returns cursor
-
-
-
     }  // namespace
 
     CommandRequest::CommandRequest(const Message& message)
@@ -66,16 +57,18 @@ namespace mongo {
         std::size_t length = _message.singleData().dataLen();
 
         // TODO: can we be safer here w.r.t overflow?
-        char* end = begin + length;
+        _messageEnd = begin + length;
 
         // TODO: uassert that we are greater than the minimum OP_COMMAND length.
+
         ConstDataCursor reader{begin};
-        const ConstDataCursor rangeEnd{end};
+        const ConstDataCursor rangeEnd{_messageEnd};
 
         auto parsedDatabase = readString(reader, rangeEnd,
                                          kMinDatabaseLength,
                                          kMaxDatabaseLength);
-        uassertStatusOK(parsedDatabase.getStatus());
+        if (!parsedDatabase.getStatus().isOK()) {
+        };
         _database = parsedDatabase.getValue();
 
         auto parsedCommandName = readString(reader, rangeEnd,
@@ -84,6 +77,9 @@ namespace mongo {
         uassertStatusOK(parsedCommandName.getStatus());
         _commandName = parsedCommandName.getValue();
 
+        // I could use DocumentRange here, but leaving it this way will
+        // make it a bit simpler to provide better error messages for invalid
+        // required fields.
         auto parsedMetadata = readBSONObj(reader, rangeEnd);
         uassertStatusOK(parsedMetadata.getStatus());
         _metadata = parsedMetadata.getValue();
@@ -91,6 +87,8 @@ namespace mongo {
         auto parsedCommandArgs = readBSONObj(reader, rangeEnd);
         uassertStatusOK(parsedCommandArgs.getStatus());
         _commandArgs = parsedCommandArgs.getValue();
+
+        _inputDocRangeBegin = std::move(reader.view());
     }
 
     StringData CommandRequest::getDatabase() const {
@@ -107,6 +105,11 @@ namespace mongo {
 
     const BSONObj& CommandRequest::getCommandArgs() const {
         return _commandArgs;
+    }
+
+    DocumentRange CommandRequest::getInputDocs() const {
+        return DocumentRange{ConstDataCursor{_inputDocRangeBegin},
+                             ConstDataCursor{_messageEnd}};
     }
 
 }  // namespace mongo

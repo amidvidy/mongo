@@ -30,6 +30,7 @@
 
 #include "mongo/base/string_data.h"
 #include "mongo/bson/bsonobj.h"
+#include "mongo/util/net/command/document_range.h"
 #include "mongo/util/net/message.h"
 
 namespace mongo {
@@ -39,33 +40,25 @@ namespace mongo {
     public:
         // Construct a CommandReply from a Message.
         // Underlying message MUST outlive the CommandReply.
-
         // Required fields are parsed eagerly, outputDocs are parsed lazily.
         explicit CommandReply(const Message& message);
-
-        // TODO: would this be useful?
-        //static StatusWith<CommandRequest> parse(const Message& message);
 
         const BSONObj& getMetadata() const;
         const BSONObj& getCommandReply() const;
 
-        // TODO: decide interface for output docs
-
-        const Message& getMessage();
+        // how to use...
+        // for (auto&& doc : reply.getOutputDocs()) {
+        //    ... do stuff with doc
+        // }
+        DocumentRange getOutputDocs() const;
     private:
         const Message& _message;
 
         BSONObj _metadata;
         BSONObj _commandReply;
+
+        const char* _outputDocRangeBegin;
+        const char* _messageEnd;
     };
 
-    /*
-    class CommandRequestBuilder {
-        CommandRequestBuilder();
-        CommandRequestBuilder& setDatabase(StringData database);
-        CommandRequestBuilder& setCommandName(StringData commandName);
-        CommandRequestBuilder& setMetadata(
-    };
-    */
-
-}
+}  // namespace mongo

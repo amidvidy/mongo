@@ -42,24 +42,35 @@ namespace {
 
     TEST(CommandReply, ParseRequiredFields) {
         std::vector<char> opCommandReplyData;
+        
+        using std::begin;
+        using std::end;
+
+        auto writeObj = [&opCommandReplyData](const BSONObj& obj) {
+            opCommandReplyData.insert(end(opCommandReplyData), obj.objdata(),
+                                 obj.objdata() + obj.objsize());
+        };
 
         BSONObjBuilder metadataBob{};
         metadataBob.append("foo", "bar");
         auto metadata = metadataBob.done();
+        writeObj(metadata);
 
         BSONObjBuilder commandReplyBob{};
         commandReplyBob.append("baz", "garply");
         auto commandReply = commandReplyBob.done();
+        writeObj(commandReply);
 
-        using std::begin;
-        using std::end;
+        BSONObjBuilder outputDoc1Bob{};
+        outputDoc1Bob.append("meep", "boop").append("meow", "chirp");
+        auto outputDoc1 = outputDoc1Bob.done();
+        writeObj(outputDoc1);
 
-        // write metadata
-        opCommandReplyData.insert(end(opCommandReplyData), metadata.objdata(),
-                             metadata.objdata() + metadata.objsize());
-        // write commandReply
-        opCommandReplyData.insert(end(opCommandReplyData), commandReply.objdata(),
-                             commandReply.objdata() + commandReply.objsize());
+        BSONObjBuilder outputDoc2Bob{};
+        outputDoc1Bob.append("bleep", "bop").append("woof", "squeak");
+        auto outputDoc2 = outputDoc2Bob.done();
+        writeObj(outputDoc2);
+
         Message toSend;
         toSend.setData(dbCommandReply,
                        opCommandReplyData.data(),
@@ -69,5 +80,18 @@ namespace {
 
         ASSERT_EQUALS(opCmdReply.getMetadata(), metadata);
         ASSERT_EQUALS(opCmdReply.getCommandReply(), commandReply);
+
+        auto outputDocRange = opCmdReply.getOutputDocs();
+        auto outputDocRangeIter = outputDocRange.begin();
+
+        ASSERT_EQUALS(*outputDocRangeIter, outputDoc1);
+        // can't use assert equals since we don't have an op to print the iter.
+        ASSERT_FALSE(outputDocRangeIter == outputDocRange.end());
+        ++outputDocRangeIter;
+        ASSERT_EQUALS(*outputDocRangeIter, outputDoc2);
+        ASSERT_FALSE(outputDocRangeIter == outputDocRange.end());
+        ++outputDocRangeIter;
+        
+        ASSERT_TRUE(outputDocRangeIter == outputDocRange.end());
     }
 }  // namespace

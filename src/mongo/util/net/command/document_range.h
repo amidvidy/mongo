@@ -57,6 +57,7 @@ namespace mongo {
                                const BSONObj*,
                                const BSONObj&> {
     public:
+        const_iterator() = default;
         explicit const_iterator(ConstDataCursor pos, ConstDataCursor rangeEnd); // ??
         
         reference operator*() const;
@@ -68,9 +69,9 @@ namespace mongo {
         friend bool operator==(const const_iterator&, const const_iterator&);
         friend bool operator!=(const const_iterator&, const const_iterator&);
     private:
-        const char* _nextDoc;
-        const char* _rangeEnd;
-        BSONObj _obj;
+        const char* _nextDoc{nullptr};
+        const char* _rangeEnd{nullptr};
+        BSONObj _obj{};
     };
 
 }  // namespace mongo

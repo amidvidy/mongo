@@ -40,12 +40,8 @@ namespace mongo {
     public:
         // Construct a CommandRequest from a Message.
         // Underlying message MUST outlive the CommandRequest.
-
         // Required fields are parsed eagerly, inputDocs are parsed lazily.
         explicit CommandRequest(const Message& message);
-
-        // TODO: would this be useful?
-        //static StatusWith<CommandRequest> parse(const Message& message);
 
         StringData getDatabase() const;
         StringData getCommandName() const;
@@ -57,8 +53,6 @@ namespace mongo {
         //    ... do stuff with doc
         // }
         DocumentRange getInputDocs() const;
-
-        const Message& getMessage();
     private:
         const Message& _message;
 
@@ -68,16 +62,7 @@ namespace mongo {
         BSONObj _commandArgs;
 
         const char* _inputDocRangeBegin;
-        const char* _inputDocRangeEnd;
+        const char* _messageEnd;
     };
-
-    /*
-    class CommandRequestBuilder {
-        CommandRequestBuilder();
-        CommandRequestBuilder& setDatabase(StringData database);
-        CommandRequestBuilder& setCommandName(StringData commandName);
-        CommandRequestBuilder& setMetadata(
-    };
-    */
 
 }

@@ -40,35 +40,48 @@ namespace {
 
     using namespace mongo;
 
-    TEST(CommandRequest, ParseRequiredFields) {
+    TEST(CommandRequest, ParseAllFields) {
         std::vector<char> opCommandData;
-
-        auto commandName = std::string{"abababa"};
-        auto database = std::string{"ookokokokok"};
-
-        BSONObjBuilder metadataBob{};
-        metadataBob.append("foo", "bar");
-        auto metadata = metadataBob.done();
-
-        BSONObjBuilder commandArgsBob{};
-        commandArgsBob.append("baz", "garply");
-        auto commandArgs = commandArgsBob.done();
 
         using std::begin;
         using std::end;
 
-        // write database chars + null terminator.
-        opCommandData.insert(end(opCommandData), begin(database), end(database));
-        opCommandData.push_back('\0');
-        // write command name chars + null terminator.
-        opCommandData.insert(end(opCommandData), begin(commandName), end(commandName));
-        opCommandData.push_back('\0');
-        // write metadata
-        opCommandData.insert(end(opCommandData), metadata.objdata(),
-                             metadata.objdata() + metadata.objsize());
-        // write commandArgs
-        opCommandData.insert(end(opCommandData), commandArgs.objdata(),
-                             commandArgs.objdata() + commandArgs.objsize());
+        auto writeString = [&opCommandData](const std::string& str) {
+            opCommandData.insert(end(opCommandData), begin(str), end(str));
+            opCommandData.push_back('\0');
+        };
+
+        auto writeObj = [&opCommandData](const BSONObj& obj) {
+            opCommandData.insert(end(opCommandData), obj.objdata(),
+                                 obj.objdata() + obj.objsize());
+        };
+
+        auto database = std::string{"ookokokokok"};
+        writeString(database);
+
+        auto commandName = std::string{"abababa"};
+        writeString(commandName);
+
+        BSONObjBuilder metadataBob{};
+        metadataBob.append("foo", "bar");
+        auto metadata = metadataBob.done();
+        writeObj(metadata);        
+
+        BSONObjBuilder commandArgsBob{};
+        commandArgsBob.append("baz", "garply");
+        auto commandArgs = commandArgsBob.done();
+        writeObj(commandArgs);
+
+        BSONObjBuilder inputDoc1Bob{};
+        inputDoc1Bob.append("meep", "boop").append("meow", "chirp");
+        auto inputDoc1 = inputDoc1Bob.done();
+        writeObj(inputDoc1);
+
+        BSONObjBuilder inputDoc2Bob{};
+        inputDoc1Bob.append("bleep", "bop").append("woof", "squeak");
+        auto inputDoc2 = inputDoc2Bob.done();
+        writeObj(inputDoc2);
+
         Message toSend;
         toSend.setData(dbCommand, opCommandData.data(), opCommandData.size());
 
@@ -78,5 +91,18 @@ namespace {
         ASSERT_EQUALS(opCmd.getDatabase(), database);
         ASSERT_EQUALS(opCmd.getMetadata(), metadata);
         ASSERT_EQUALS(opCmd.getCommandArgs(), commandArgs);
+
+        auto inputDocRange = opCmd.getInputDocs();
+        auto inputDocRangeIter = inputDocRange.begin();
+
+        ASSERT_EQUALS(*inputDocRangeIter, inputDoc1);
+        // can't use assert equals since we don't have an op to print the iter.
+        ASSERT_FALSE(inputDocRangeIter == inputDocRange.end());
+        ++inputDocRangeIter;
+        ASSERT_EQUALS(*inputDocRangeIter, inputDoc2);
+        ASSERT_FALSE(inputDocRangeIter == inputDocRange.end());
+        ++inputDocRangeIter;
+        
+        ASSERT_TRUE(inputDocRangeIter == inputDocRange.end());
     }
 }  // namespace

@@ -46,7 +46,12 @@ namespace mongo {
                                       const ConstDataCursor rangeEnd,
                                       std::size_t minLength,
                                       std::size_t maxLength);
-
+    
+    // T must satisfy EqualityComparable concept
+    // passing T by value because this will only be used with primitives.
+    // TODO: the existence of this helper indicates a need for a DataRange,
+    // or BoundedDataCursor primitive.
+    // returns cursor
     template<typename T>
     StatusWith<std::size_t> skipUntil(ConstDataCursor& reader,
                                       const ConstDataCursor rangeEnd,

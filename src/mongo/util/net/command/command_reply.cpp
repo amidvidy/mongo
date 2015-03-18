@@ -40,10 +40,10 @@ namespace mongo {
         std::size_t length = _message.singleData().dataLen();
 
         // TODO: overflow?
-        char* end = begin + length;
+        _messageEnd = begin + length;
 
         ConstDataCursor reader{begin};
-        const ConstDataCursor rangeEnd{end};
+        const ConstDataCursor rangeEnd{_messageEnd};
 
         auto parsedMetadata = readBSONObj(reader, rangeEnd);
         uassertStatusOK(parsedMetadata.getStatus());
@@ -52,6 +52,8 @@ namespace mongo {
         auto parsedCommandArgs = readBSONObj(reader, rangeEnd);
         uassertStatusOK(parsedCommandArgs.getStatus());
         _commandReply = parsedCommandArgs.getValue();
+
+        _outputDocRangeBegin = std::move(reader.view());
     }
 
     const BSONObj& CommandReply::getMetadata() const {
@@ -60,6 +62,11 @@ namespace mongo {
 
     const BSONObj& CommandReply::getCommandReply() const {
         return _commandReply;
+    }
+
+    DocumentRange CommandReply::getOutputDocs() const {
+        return DocumentRange{ConstDataCursor{_outputDocRangeBegin},
+                             ConstDataCursor{_messageEnd}};
     }
 
 }  // namespace mongo
