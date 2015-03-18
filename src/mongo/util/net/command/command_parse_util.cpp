@@ -39,11 +39,11 @@ namespace mongo {
         // TODO constant ?
         if (doc.objsize() < 5) {
             return StatusWith<BSONObj>{ErrorCodes::FailedToParse,
-                                       "BSONObj length too small in OP_COMMAND message"};
+                                       "Invalid BSONObj"};
         }
         if (doc.objsize() > (rangeEnd.view() - reader.view())) {
             return StatusWith<BSONObj>{ErrorCodes::FailedToParse,
-                                       "BSONObj length too big in OP_COMMAND message"};
+                                       "BSONObj length goes past end of valid range"};
         }
         reader += doc.objsize();
         return StatusWith<BSONObj>{doc};

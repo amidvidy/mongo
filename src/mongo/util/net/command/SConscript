@@ -5,10 +5,16 @@ Import("env")
 env.Library('command_parse_util',
             'command_parse_util.cpp')
 
+env.Library('document_range',
+            'document_range.cpp',
+            LIBDEPS=[
+                'command_parse_util'
+            ])
+
 env.Library('command_request',
             'command_request.cpp',
             LIBDEPS=[
-                'command_parse_util',
+                'document_range',
                 '$BUILD_DIR/mongo/network',
             ])
 
@@ -17,7 +23,7 @@ env.Library('command_request',
 env.Library('command_reply',
             'command_reply.cpp',
             LIBDEPS=[
-                'command_parse_util',
+                'document_range',
                 '$BUILD_DIR/mongo/network',
             ])
 

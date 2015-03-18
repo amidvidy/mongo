@@ -28,56 +28,49 @@
 
 #pragma once
 
-#include "mongo/base/string_data.h"
+#include <cstddef>
+#include <iterator>
+
+#include "mongo/base/data_cursor.h"
 #include "mongo/bson/bsonobj.h"
-#include "mongo/util/net/message.h"
-#include "mongo/util/net/command/document_range.h"
 
 namespace mongo {
 
-    // An immutable view of an OP_COMMAND message.
-    class CommandRequest {
+    // A read-only view over a sequence of BSON documents.
+    class DocumentRange {
     public:
-        // Construct a CommandRequest from a Message.
-        // Underlying message MUST outlive the CommandRequest.
+        class const_iterator;
 
-        // Required fields are parsed eagerly, inputDocs are parsed lazily.
-        explicit CommandRequest(const Message& message);
+        DocumentRange(ConstDataCursor begin, ConstDataCursor end);
 
-        // TODO: would this be useful?
-        //static StatusWith<CommandRequest> parse(const Message& message);
-
-        StringData getDatabase() const;
-        StringData getCommandName() const;
-        const BSONObj& getMetadata() const;
-        const BSONObj& getCommandArgs() const;
-
-        // how to use...
-        // for (auto&& doc : req.getInputDocs()) {
-        //    ... do stuff with doc
-        // }
-        DocumentRange getInputDocs() const;
-
-        const Message& getMessage();
+        const_iterator begin() const;
+        const_iterator end() const;
     private:
-        const Message& _message;
-
-        StringData _database;
-        StringData _commandName;
-        BSONObj _metadata;
-        BSONObj _commandArgs;
-
-        const char* _inputDocRangeBegin;
-        const char* _inputDocRangeEnd;
+        const char* _begin;
+        const char* _end;
     };
 
-    /*
-    class CommandRequestBuilder {
-        CommandRequestBuilder();
-        CommandRequestBuilder& setDatabase(StringData database);
-        CommandRequestBuilder& setCommandName(StringData commandName);
-        CommandRequestBuilder& setMetadata(
-    };
-    */
+    class DocumentRange::const_iterator
+        : public std::iterator<std::forward_iterator_tag,
+                               BSONObj,
+                               std::ptrdiff_t,
+                               const BSONObj*,
+                               const BSONObj&> {
+    public:
+        explicit const_iterator(ConstDataCursor pos, ConstDataCursor rangeEnd); // ??
+        
+        reference operator*() const;
+        pointer operator->() const;
+        
+        const_iterator& operator++();
+        const_iterator operator++(int);
 
-}
+        friend bool operator==(const const_iterator&, const const_iterator&);
+        friend bool operator!=(const const_iterator&, const const_iterator&);
+    private:
+        const char* _nextDoc;
+        const char* _rangeEnd;
+        BSONObj _obj;
+    };
+
+}  // namespace mongo
