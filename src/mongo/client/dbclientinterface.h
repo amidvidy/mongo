@@ -42,6 +42,7 @@
 #include "mongo/db/jsobj.h"
 #include "mongo/logger/log_severity.h"
 #include "mongo/platform/atomic_word.h"
+#include "mongo/platform/cstdint.h"
 #include "mongo/stdx/functional.h"
 #include "mongo/util/mongoutils/str.h"
 #include "mongo/util/net/message.h"
@@ -848,7 +849,6 @@ namespace mongo {
         bool setDbProfilingLevel(const std::string &dbname, ProfilingLevel level, BSONObj *info = 0);
         bool getDbProfilingLevel(const std::string &dbname, ProfilingLevel& level, BSONObj *info = 0);
 
-
         /** This implicitly converts from char*, string, and BSONObj to be an argument to mapreduce
             You shouldn't need to explicitly construct this
          */
@@ -1035,6 +1035,11 @@ namespace mongo {
         PostRunCommandHookFunc getPostRunCommandHook() const {
             return _postRunCommandHook;
         }
+
+        /**
+         * Kills an operation on a remote mongod.
+         */
+        Status killOp(unsigned int opid);
 
 
     protected:
