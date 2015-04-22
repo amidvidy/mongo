@@ -42,8 +42,14 @@
 #include "mongo/db/jsobj.h"
 #include "mongo/db/json.h"
 #include "mongo/db/namespace_string.h"
+#include "mongo/rpc/enabled.h"
 #include "mongo/rpc/get_status_from_command_result.h"
+#include "mongo/rpc/reply.h"
+#include "mongo/rpc/request.h"
+#include "mongo/rpc/request_builder.h"
 #include "mongo/s/stale_exception.h"  // for RecvStaleConfigException
+#include "mongo/stdx/functional.h"
+#include "mongo/stdx/memory.h"
 #include "mongo/util/assert_util.h"
 #include "mongo/util/concurrency/mutex.h"
 #include "mongo/util/debug_util.h"
@@ -933,7 +939,41 @@ namespace mongo {
                                         const BSONObj& cmd,
                                         BSONObj &info,
                                         int options) {
-        if (DBClientWithCommands::runCommand(dbname, cmd, info, options))
+
+        // use OP_COMMAND
+        // TODO: move to separate function
+        if (rpc::enabled()) {
+            // TODO, only make copy of cmd if using runCommandHook
+            BSONObjBuilder cmdObj;
+            cmdObj.appendElements(cmd);
+            if (_runCommandHook) {
+                _runCommandHook(&cmdObj);
+            }
+            BSONObj emptyMetadataFixme;
+
+            rpc::RequestBuilder rb;
+
+            auto requestMessage = rb.setDatabase(dbname)
+                                    .setCommandArgs(cmdObj.done())
+                                    .setMetadata(emptyMetadataFixme)
+                                    .done();
+
+            std::unique_ptr<Message> replyMessage = stdx::make_unique<Message>();
+            // call oddly takes by pointer, so we need to put this on the stack...
+            auto host = getServerAddress();
+
+            // run the command
+            call(*requestMessage, *replyMessage, false /* assertOk */, &host);
+
+            rpc::Reply reply(replyMessage.get());
+            info = std::move(reply.getCommandReply());
+
+            if (_postRunCommandHook) {
+                _postRunCommandHook(info, getServerAddress());
+            }
+            return isOk(info);
+        }
+        else if (DBClientWithCommands::runCommand(dbname, cmd, info, options))
             return true;
         
         if ( clientSet && isNotMasterErrorString( info["errmsg"] ) ) {
