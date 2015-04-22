@@ -26,6 +26,18 @@ env.Library(
 
 env.Library(
     target=[
+        'enabled',
+    ],
+    source=[
+        'enabled.cpp',
+    ],
+    LIBDEPS=[
+        '$BUILD_DIR/server_parameters'
+    ],
+)
+
+env.Library(
+    target=[
         'request',
     ],
     source=[
