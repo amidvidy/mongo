@@ -77,39 +77,57 @@ namespace mongo {
          * for the OK case
          */
         StatusWith(T t)
-            : _status(Status::OK()), _t(std::move(t)) {
+            : _status(Status::OK()) {
+            ::new(&_storage) T(std::move(t));
         }
 
 #if defined(_MSC_VER) && _MSC_VER < 1900
         StatusWith(const StatusWith& s)
-            : _status(s._status), _t(s._t) {
+            : _status(s._status) {
+            if (isOK()) {
+                ::new(&_storage) T(s.getValue());
+            }
         }
 
         StatusWith(StatusWith&& s)
-            : _status(std::move(s._status)), _t(std::move(s._t)) {
+            : _status(std::move(s._status)) {
+            if (isOK()) {
+                ::new(&_storage) T(std::move(s.getValue()));
+            }
         }
 
         StatusWith& operator=(const StatusWith& other) {
             _status = other._status;
-            _t = other._t;
+            if (isOK()) {
+                ::new(&_storage) T(other.getValue());
+            }
             return *this;
         }
 
         StatusWith& operator=(StatusWith&& other) {
             _status = std::move(other._status);
-            _t = std::move(other._t);
+            if (isOK()) {
+                ::new(&_storage) T(std::move(other.getValue()));
+            }
             return *this;
         }
 #endif
 
+        // Need to manually call dtor in the OK case.
+        ~StatusWith() {
+            if (isOK()) {
+                static_cast<const T*>(static_cast<const void*>(&_storage))->~T();
+            }
+        }
+
         const T& getValue() const {
-            // TODO dassert( isOK() );
-            return _t;
+            //invariant(isOK());
+            return *static_cast<const T*>(static_cast<const void*>(&_storage));
         }
 
         T& getValue() {
-            // TODO dassert( isOK() );
-            return _t;
+            //invariant(isOK());
+            return *static_cast<T*>(static_cast<void*>(&_storage));
         }
 
         const Status& getStatus() const {
@@ -122,7 +140,7 @@ namespace mongo {
 
     private:
         Status _status;
-        T _t;
+        typename std::aligned_storage<sizeof(T), alignof(T)>::type _storage;
     };
 
     template<typename T, typename... Args>

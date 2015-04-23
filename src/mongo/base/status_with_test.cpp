@@ -37,11 +37,12 @@
 namespace {
 
     using mongo::StatusWith;
-
+    using mongo::makeStatusWith;
+    using mongo::ErrorCodes;
+    /*
     TEST(StatusWith, makeStatusWith) {
-        using mongo::makeStatusWith;
-        using mongo::StringData;
 
+        using mongo::StringData;
         auto s1 = makeStatusWith<int>(3);
         ASSERT_TRUE(s1.isOK());
         ASSERT_EQUALS(uassertStatusOK(s1), 3);
@@ -56,7 +57,6 @@ namespace {
         ASSERT_EQUALS(uassertStatusOK(s3).size(), 3u);
 
         auto s4 = makeStatusWith<std::string>("foo");
-
         ASSERT_TRUE(s4.isOK());
         ASSERT_EQUALS(uassertStatusOK(s4), std::string{"foo"});
         const char* foo = "barbaz";
@@ -73,6 +73,79 @@ namespace {
         // Check that we use T(...) and not T{...}
         // ASSERT_EQUALS requires an ostream overload for vector<int>
         ASSERT_TRUE(makeStatusWith<std::vector<int>>(1, 2) == std::vector<int>{2});
+    }
+    */
+    TEST(StatusWith, noDefaultConstructor) {
+
+        class TestClass {
+            TestClass() = delete;
+        public:
+            TestClass(int i, double j, bool k)
+                : _i(i), _j(j), _k(k) {
+            }
+            int _i;
+            double _j;
+            bool _k;
+        };
+
+        auto s1 = StatusWith<TestClass>{TestClass(1, 2.0, false)};
+        ASSERT_TRUE(s1.isOK());
+        auto s1val = s1.getValue();
+        ASSERT_EQUALS(s1val._i, 1);
+        ASSERT_EQUALS(s1val._j, 2.0);
+        ASSERT_EQUALS(s1val._k, false);
+
+        auto s2 = makeStatusWith<TestClass>(1, 2.0, false);
+        ASSERT_TRUE(s2.isOK());
+        auto s2val = s2.getValue();
+        ASSERT_EQUALS(s2val._i, 1);
+        ASSERT_EQUALS(s2val._j, 2.0);
+        ASSERT_EQUALS(s2val._k, false);
+
+        auto s3 = StatusWith<TestClass>(ErrorCodes::NoProgressMade, "blah");
+        ASSERT_FALSE(s3.isOK());
+
+        class LifeCycle {
+            LifeCycle() = delete;
+        public:
+            LifeCycle(int* i) : _i(i) {
+                std::cout << "lconstruct" << std::endl;
+                *_i = 1;
+            }
+
+            LifeCycle(LifeCycle& o) : _i(o._i) {
+                std::cout << "copy" << std::endl;
+            }
+
+            LifeCycle(LifeCycle&& o) : _i(std::move(o._i)) {
+                std::cout << "move" << std::endl;
+            }
+
+            ~LifeCycle() {
+                *_i = 2;
+                std::cout << "ldestruct: " << this << std::endl;
+            }
+            LifeCycle& operator=(const LifeCycle& o) {
+                _i = o._i;
+                std::cout << "lcopy-assign" << std::endl;
+                return *this;
+            }
+            LifeCycle& operator=(LifeCycle&& o) {
+                _i = std::move(o._i);
+                std::cout << "lmove-assign" << std::endl;
+                return *this;
+            }
+            int* _i;
+        };
+
+        int state = 0;
+        {
+            ASSERT_TRUE(state == 0);
+            auto status = StatusWith<LifeCycle>(LifeCycle(&state));
+            ASSERT_TRUE(state == 1);
+            ASSERT_TRUE(status.isOK());
+        }
+        ASSERT_TRUE(state == 2);
     }
 
 }  // namespace
