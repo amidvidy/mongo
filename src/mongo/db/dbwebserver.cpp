@@ -266,8 +266,7 @@ namespace {
             rpc::CommandRequest cmdRequest{cmdRequestMsg.get()};
             rpc::CommandReplyBuilder cmdReplyBuilder{};
 
-            // TODO: remove cmdObj from parameters (SERVER-18236)
-            Command::execCommand(txn, c, cmdObj, cmdRequest, &cmdReplyBuilder);
+            Command::execCommand(txn, c, cmdRequest, &cmdReplyBuilder);
 
             auto cmdReplyMsg = cmdReplyBuilder.done();
             rpc::CommandReply cmdReply{cmdReplyMsg.get()};

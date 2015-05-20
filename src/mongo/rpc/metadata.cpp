@@ -32,6 +32,7 @@
 
 #include "mongo/client/dbclientinterface.h"
 #include "mongo/db/jsobj.h"
+#include "mongo/rpc/metadata/server_selectors.h"
 
 namespace mongo {
 namespace rpc {
@@ -41,27 +42,52 @@ namespace metadata {
         return BSONObj();
     }
 
-    const char kSecondaryOk[] = "$secondaryOk";
+    Status read(OperationContext* txn, const BSONObj& metadataObj) {
+        auto swServerSelectors = ServerSelectors::readFromMetadata(metadataObj);
+        if (!swServerSelectors.isOK()) {
+            return swServerSelectors.getStatus();
+        }
+        ServerSelectors::get(txn) = std::move(swServerSelectors.getValue());
+
+        return Status::OK();
+    }
+
+    Status write(OperationContext* txn, BSONObjBuilder* metadataBob) {
+        auto ssStatus = ServerSelectors::writeToMetadata(ServerSelectors::get(txn), metadataBob);
+        if (!ssStatus.isOK()) {
+            return ssStatus;
+        }
+        return Status::OK();
+    }
 
     StatusWith<CommandAndMetadata> upconvertRequest(BSONObj legacyCmdObj, int queryFlags) {
+        BSONObjBuilder commandBob;
         BSONObjBuilder metadataBob;
 
-        // note second check may be erroneous: see SERVER-18194
-        if ((queryFlags & QueryOption_SlaveOk)) {
-            metadataBob.append(kSecondaryOk, 1);
+        auto upconvertStatus = ServerSelectors::upconvert(legacyCmdObj,
+                                                          queryFlags,
+                                                          &commandBob,
+                                                          &metadataBob);
+        if (!upconvertStatus.isOK()) {
+            return upconvertStatus;
         }
 
-        return std::make_tuple(std::move(legacyCmdObj), std::move(metadataBob.obj()));
+        return std::make_tuple(commandBob.obj(), metadataBob.obj());
     }
 
     StatusWith<LegacyCommandAndFlags> downconvertRequest(BSONObj cmdObj, BSONObj metadata) {
-        int flags = 0;
+        int legacyQueryFlags = 0;
+        BSONObjBuilder legacyCommandBob;
 
-        if (metadata.hasField(kSecondaryOk)) {
-            flags |= QueryOption_SlaveOk;
+        auto downconvertStatus = ServerSelectors::downconvert(cmdObj,
+                                                              metadata,
+                                                              &legacyCommandBob,
+                                                              &legacyQueryFlags);
+        if (!downconvertStatus.isOK()) {
+            return downconvertStatus;
         }
 
-        return std::make_tuple(std::move(cmdObj), flags);
+        return std::make_tuple(legacyCommandBob.obj(), std::move(legacyQueryFlags));
     }
 
 }  // namespace metadata

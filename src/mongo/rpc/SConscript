@@ -113,7 +113,24 @@ env.Library(
         'metadata',
     ],
     source=[
-        'metadata.cpp'
+        'metadata.cpp',
+        'metadata/server_selectors.cpp',
+    ],
+    LIBDEPS=[
+        '$BUILD_DIR/mongo/client/read_preference',
+        '$BUILD_DIR/mongo/util/decorable',
+    ],
+)
+
+env.CppUnitTest(
+    target=[
+        'metadata_test',
+    ],
+    source=[
+        'metadata/server_selectors_test.cpp',
+    ],
+    LIBDEPS=[
+        'metadata',
     ],
 )
 
