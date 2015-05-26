@@ -333,6 +333,40 @@ namespace mutablebson {
         // Set by command line.  Controls whether or not testing-only commands should be available.
         static int testCommandsEnabled;
 
+        /**
+         * When an assertion is hit during command execution, this method is used to fill the fields
+         * of the command reply with the information from the error. In addition, as much useful
+         * information about the command is logged. This function does not return anything, because
+         * there is typically already an active exception when this function is called, so there
+         * is little that can be done if it fails.
+         */
+        static void generateErrorResponse(OperationContext* txn,
+                                          rpc::ReplyBuilderInterface* replyBuilder,
+                                          const AssertionException& exception,
+                                          const rpc::RequestInterface& request,
+                                          Command* command);
+
+
+        /**
+         * Similar to the above function, but doesn't print the command's arguments or metadata.
+         * This is because we need the command instance to actually redact the arguments before
+         * logging them.
+         */
+        static void generateErrorResponse(OperationContext* txn,
+                                          rpc::ReplyBuilderInterface* replyBuilder,
+                                          const AssertionException& exception,
+                                          const rpc::RequestInterface& request);
+
+
+        /**
+         * Similar to other overloads of generateErrorResponse, but doesn't print any information
+         * about the specific command being executed. This is neccessary, for example, if there is
+         * an assertion hit while parsing the command.
+         */
+        static void generateErrorResponse(OperationContext* txn,
+                                          rpc::ReplyBuilderInterface* replyBuilder,
+                                          const AssertionException& exception);
+
     private:
 
         /**
@@ -349,7 +383,7 @@ namespace mutablebson {
                                           const BSONObj& cmdObj);
     };
 
-    bool runCommands(OperationContext* txn,
+    void runCommands(OperationContext* txn,
                      const rpc::RequestInterface& request,
                      rpc::ReplyBuilderInterface* replyBuilder);
 
