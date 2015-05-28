@@ -68,18 +68,17 @@ namespace mongo {
     // to their old style equivalents.
     void Command::execCommand(OperationContext* txn,
                               Command* command,
-                              const BSONObj& interposedCmd,
                               const rpc::RequestInterface& request,
                               rpc::ReplyBuilderInterface* replyBuilder) {
 
         int queryFlags = 0;
+        BSONObj cmdObj;
 
-        std::tie(std::ignore, queryFlags) = uassertStatusOK(
+        std::tie(cmdObj, queryFlags) = uassertStatusOK(
             rpc::metadata::downconvertRequest(request.getCommandArgs(),
                                               request.getMetadata())
         );
 
-        BSONObj cmdObj = interposedCmd;
         std::string db = request.getDatabase().rawData();
         BSONObjBuilder result;
 

@@ -33,6 +33,7 @@
 #include "mongo/platform/basic.h"
 
 #include <boost/scoped_ptr.hpp>
+#include <boost/optional.hpp>
 #include <time.h>
 
 #include "mongo/base/disallow_copying.h"
@@ -95,6 +96,7 @@
 #include "mongo/rpc/request_interface.h"
 #include "mongo/rpc/reply_builder_interface.h"
 #include "mongo/rpc/metadata.h"
+#include "mongo/rpc/metadata/server_selectors.h"
 #include "mongo/s/d_state.h"
 #include "mongo/s/stale_exception.h"  // for SendStaleConfigException
 #include "mongo/scripting/engine.h"
@@ -1189,7 +1191,6 @@ namespace {
     */
     void Command::execCommand(OperationContext* txn,
                               Command* command,
-                              const BSONObj& prevInterposedCmd,
                               const rpc::RequestInterface& request,
                               rpc::ReplyBuilderInterface* replyBuilder) {
 
@@ -1197,7 +1198,7 @@ namespace {
 
         // Right now our metadata handling relies on mutating the command object.
         // This will go away when SERVER-18236 is implemented
-        BSONObj interposedCmd = prevInterposedCmd;
+        BSONObj interposedCmd = request.getCommandArgs();
 
         std::string dbname = request.getDatabase().toString();
         scoped_ptr<MaintenanceModeSetter> mmSetter;
@@ -1271,21 +1272,21 @@ namespace {
         repl::ReplicationCoordinator* replCoord = repl::getGlobalReplicationCoordinator();
 
         bool iAmPrimary = replCoord->canAcceptWritesForDatabase(dbname);
-
         bool commandCanRunOnSecondary = command->slaveOk();
 
+        using rpc::metadata::ServerSelectors;
+
         bool commandIsOverriddenToRunOnSecondary = command->slaveOverrideOk() &&
+
             // the $secondaryOk option is set
-            (request.getMetadata().hasField(rpc::metadata::kSecondaryOk) ||
+            (ServerSelectors::get(txn).secondaryOk() ||
 
              // or the command has a read preference (may be incorrect, see SERVER-18194)
              // confusingly, we need to check the original (unmodified) command for the read pref
              // as it will have been removed by now.
-             // TODO: (SERVER-18236 read this off request metadata)
-             Query::hasReadPreference(request.getCommandArgs()));
+             (ServerSelectors::get(txn).readPreference() != boost::none));
 
         bool iAmStandalone = !txn->writesAreReplicated();
-
         bool canRunHere = iAmPrimary ||
                           commandCanRunOnSecondary ||
                           commandIsOverriddenToRunOnSecondary ||
@@ -1466,71 +1467,34 @@ namespace {
                      rpc::ReplyBuilderInterface* replyBuilder) {
 
         try {
-
+            uassertStatusOK(rpc::metadata::read(txn, request.getMetadata()));
             dassert(replyBuilder->getState() == rpc::ReplyBuilderInterface::State::kMetadata);
 
-            string dbname = request.getDatabase().toString();
-
-            // right now our metadata handling depends on mutating the command
-            // the "interposedCmd" parameters will go away when SERVER-18236
-            // is resolved
-            BSONObj interposedCmd;
-            {
-                BSONElement e = request.getCommandArgs().firstElement();
-                if ( e.type() == Object && (e.fieldName()[0] == '$'
-                                            ? str::equals("query", e.fieldName()+1)
-                                            : str::equals("query", e.fieldName())))
-                    {
-                        interposedCmd = e.embeddedObject();
-                        if (request.getCommandArgs().hasField("$maxTimeMS")) {
-                            replyBuilder
-                                ->setMetadata(rpc::metadata::empty())
-                                .setCommandReply(Status(ErrorCodes::BadValue,
-                                                        "cannot use $maxTimeMS query option with "
-                                                        "commands; use maxTimeMS command option "
-                                                        "instead"));
-                            return;
-                        }
-                    }
-                else {
-                    interposedCmd = request.getCommandArgs();
-                }
-            }
-
-            BSONElement e = interposedCmd.firstElement();
-
-            Command* c = e.type() ? Command::findCommand( e.fieldNameStringData() ) : nullptr;
-
-            if (c) {
-                LOG(2) << "run command " << request.getDatabase() << ".$cmd" << ' '
-                       << c->getRedactedCopyForLogging(request.getCommandArgs());
-                try {
-                    Command::execCommand(txn, c, interposedCmd, request, replyBuilder);
-                }
-                // We use a nested try block here so we can call the overload of
-                // generateErrorResponse that prints the redacted command arguments.
-                catch (const AssertionException& ex) {
-                    Command::generateErrorResponse(txn, replyBuilder, ex, request, c);
-                }
-
-                dassert(replyBuilder->getState() == rpc::ReplyBuilderInterface::State::kOutputDocs);
-            }
-            else {
-                // In the absence of a Command object, no redaction is possible. Therefore
-                // to avoid displaying potentially sensitive information in the logs,
-                // we restrict the log message to the name of the unrecognized command.
-                // However, the complete command object will still be echoed to the client.
-                string msg = str::stream() << "no such command: " << request.getCommandName();
-
-                LOG(2) << msg;
-                replyBuilder
-                    ->setMetadata(rpc::metadata::empty())
-                    .setCommandReply(Status(ErrorCodes::CommandNotFound, std::move(msg)),
-                                     BSON("bad cmd" << request.getCommandArgs()));
-
+            Command * c = nullptr; 
+            // In the absence of a Command object, no redaction is possible. Therefore
+            // to avoid displaying potentially sensitive information in the logs,
+            // we restrict the log message to the name of the unrecognized command.
+            // However, the complete command object will still be echoed to the client.
+            if (!(c = Command::findCommand(request.getCommandName()))) {
                 Command::unknownCommands.increment();
+
+                std::string msg = str::stream() << "no such command: " << request.getCommandName();
+                LOG(2) << msg;
+                uasserted(ErrorCodes::CommandNotFound,
+                          str::stream() << msg << " bad cmd:" << request.getCommandArgs());
             }
 
+            LOG(2) << "run command " << request.getDatabase() << ".$cmd" << ' '
+                   << c->getRedactedCopyForLogging(request.getCommandArgs());
+                
+            try {
+                Command::execCommand(txn, c, request, replyBuilder);
+            }
+            // We use a nested try block here so we can call the overload of generateErrorResponse
+            // that prints the redacted command arguments.
+            catch (const AssertionException& ex) {
+                Command::generateErrorResponse(txn, replyBuilder, ex, request, c);
+            }
         }
 
         catch (const AssertionException& ex) {

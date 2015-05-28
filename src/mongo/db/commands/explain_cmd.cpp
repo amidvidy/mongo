@@ -30,12 +30,15 @@
 
 #include "mongo/db/commands/explain_cmd.h"
 
+#include <boost/optional.hpp>
+
 #include "mongo/client/dbclientinterface.h"
 #include "mongo/db/catalog/database.h"
 #include "mongo/db/client.h"
 #include "mongo/db/commands.h"
 #include "mongo/db/query/explain.h"
 #include "mongo/db/repl/replication_coordinator_global.h"
+#include "mongo/rpc/metadata/server_selectors.h"
 #include "mongo/util/mongoutils/str.h"
 
 namespace mongo {
@@ -92,8 +95,12 @@ namespace mongo {
         repl::ReplicationCoordinator* replCoord = repl::getGlobalReplicationCoordinator();
         bool iAmPrimary = replCoord->canAcceptWritesForDatabase(dbname);
         bool commandCanRunOnSecondary = commToExplain->slaveOk();
+
+        using rpc::metadata::ServerSelectors;
+
         bool commandIsOverriddenToRunOnSecondary = commToExplain->slaveOverrideOk() &&
-            ((options & QueryOption_SlaveOk) || Query::hasReadPreference(explainObj));
+            (ServerSelectors::get(txn).secondaryOk() ||
+             ServerSelectors::get(txn).readPreference() != boost::none);
         bool iAmStandalone = !txn->writesAreReplicated();
 
         const bool canRunHere = iAmPrimary ||

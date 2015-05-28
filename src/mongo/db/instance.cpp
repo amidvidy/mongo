@@ -1130,7 +1130,6 @@ namespace {
                 rpc::LegacyReplyBuilder cmdReplyBuilder{};
                 Command::execCommand(txn,
                                      createIndexesCmd,
-                                     cmdObj, // TODO remove (SERVER-18236)
                                      cmdRequest,
                                      &cmdReplyBuilder);
                 auto cmdReplyMsg = cmdReplyBuilder.done();

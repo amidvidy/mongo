@@ -34,6 +34,8 @@
 
 namespace mongo {
     class BSONObj;
+    class BSONObjBuilder;
+    class OperationContext;
 
 /**
  * Utilities for converting metadata between the legacy OP_QUERY format and the new
@@ -55,15 +57,22 @@ namespace mongo {
 namespace rpc {
 namespace metadata {
 
+    // TODO refactor this stuff to metadata folder.
+
     /**
      * Returns an empty metadata object.
      */
     BSONObj empty();
 
     /**
-     * The field name for the secondaryOk metadata field.
+     * Read metadata from a metadata object and set it on this OperationContext.
      */
-    extern const char kSecondaryOk[];
+    Status read(OperationContext* txn, const BSONObj& metadataObj);
+
+    /**
+     * Write metadata from an OperationContext to a metadata object.
+     */
+    Status write(OperationContext* txn, BSONObjBuilder* metadataBob);
 
     /**
      * A command object and a corresponding metadata object.
