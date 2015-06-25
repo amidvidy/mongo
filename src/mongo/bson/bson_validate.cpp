@@ -27,6 +27,8 @@
  *    then also delete it in the license file.
  */
 
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kNetwork
+
 #include <cstring>
 #include <deque>
 #include <limits>
@@ -35,6 +37,7 @@
 #include "mongo/bson/bson_validate.h"
 #include "mongo/bson/oid.h"
 #include "mongo/db/jsobj.h"
+#include "mongo/util/log.h"
 
 namespace mongo {
 
@@ -86,6 +89,7 @@ public:
 
     Status readUTF8String(StringData* out) {
         int sz;
+        StringData elem;
         if (!readNumber<int>(&sz))
             return makeError("invalid bson", _idElem);
 
@@ -94,8 +98,9 @@ public:
             return makeError("invalid bson", _idElem);
         }
 
+        elem = StringData(_buffer + _position, sz);
         if (out) {
-            *out = StringData(_buffer + _position, sz);
+            *out = elem;
         }
 
         if (!skip(sz - 1))
@@ -106,6 +111,7 @@ public:
             return makeError("invalid bson", _idElem);
 
         if (c != 0)
+            log() << elem;
             return makeError("not null terminated string", _idElem);
 
         return Status::OK();
