@@ -110,9 +110,10 @@ public:
         if (!readNumber<char>(&c))
             return makeError("invalid bson", _idElem);
 
-        if (c != 0)
+        if (c != 0) {
             log() << elem;
             return makeError("not null terminated string", _idElem);
+        }
 
         return Status::OK();
     }
