@@ -26,6 +26,8 @@
  *    it in the license file.
  */
 
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kNetwork
+
 #include "mongo/platform/basic.h"
 
 #include "mongo/rpc/object_check.h"
@@ -34,12 +36,17 @@
 #include "mongo/bson/bson_validate.h"
 #include "mongo/db/jsobj.h"
 #include "mongo/db/server_options.h"
-
+#include "mongo/util/base64.h"
+#include "mongo/util/log.h"
 
 namespace mongo {
 
 Status Validator<BSONObj>::validateLoad(const char* ptr, size_t length) {
-    return serverGlobalParams.objcheck ? validateBSON(ptr, length) : Status::OK();
+    Status valid = serverGlobalParams.objcheck ? validateBSON(ptr, length) : Status::OK();
+    if (!valid.isOK()) {
+        log() << base64::encode(ptr, length);
+    }
+    return valid;
 }
 
 Status Validator<BSONObj>::validateStore(const BSONObj& toStore) {
