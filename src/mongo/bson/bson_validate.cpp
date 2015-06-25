@@ -111,7 +111,7 @@ public:
             return makeError("invalid bson", _idElem);
 
         if (c != 0) {
-            log() << elem;
+            log() << "not null terminated string at " << _position;
             return makeError("not null terminated string", _idElem);
         }
 
