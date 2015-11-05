@@ -30,6 +30,8 @@
 
 #include "mongo/platform/basic.h"
 
+#include <array>
+
 #include "mongo/executor/async_stream.h"
 #include "mongo/executor/async_stream_common.h"
 #include "mongo/util/assert_util.h"
@@ -72,6 +74,10 @@ void AsyncStream::read(asio::mutable_buffer buffer, StreamHandler&& streamHandle
 
 void AsyncStream::cancel() {
     cancelStream(&_stream, _connected);
+}
+
+bool AsyncStream::isOpen() {
+    return checkIfStreamIsOpen(&_stream, _connected);
 }
 
 }  // namespace executor

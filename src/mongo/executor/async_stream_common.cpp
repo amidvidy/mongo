@@ -42,5 +42,11 @@ void logCloseFailed(std::error_code ec) {
     LOG(1) << "failed to close stream: " << ec.message();
 }
 
+void logUnexpectedErrorInCheckOpen(std::error_code ec) {
+    invariant(ec);
+    LOG(1) << "unexpected error when checking if a stream was open: " << ec.message()
+           << ", expected EOF";
+}
+
 }  // namespace executor
 }  // namespace  mongo

@@ -98,6 +98,10 @@ void AsyncSecureStream::cancel() {
     cancelStream(&_stream.lowest_layer(), _connected);
 }
 
+bool AsyncSecureStream::isOpen() {
+    return checkIfStreamIsOpen(&_stream.next_layer(), _connected);
+}
+
 }  // namespace executor
 }  // namespace mongo
 

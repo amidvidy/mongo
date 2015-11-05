@@ -49,6 +49,8 @@ public:
 
     void cancel() override;
 
+    bool isOpen() override;
+
 private:
     asio::ip::tcp::socket _stream;
     bool _connected = false;
