@@ -43,7 +43,7 @@ class Status;
  */
 template <>
 struct Validator<BSONObj> {
-    static Status validateLoad(const char* ptr, size_t length) {
+    inline static Status validateLoad(const char* ptr, size_t length) {
         return serverGlobalParams.objcheck ? validateBSON(ptr, length) : Status::OK();
     }
     static Status validateStore(const BSONObj& toStore);
