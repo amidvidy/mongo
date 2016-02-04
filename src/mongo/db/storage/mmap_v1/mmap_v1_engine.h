@@ -42,7 +42,8 @@ class MMAPV1DatabaseCatalogEntry;
 
 class MMAPV1Engine : public StorageEngine {
 public:
-    MMAPV1Engine(const StorageEngineLockFile& lockFile);
+    // The lockFile parameter can be a nullptr if we are running in read-only mode.
+    MMAPV1Engine(const StorageEngineLockFile* lockFile);
     virtual ~MMAPV1Engine();
 
     void finishInit();

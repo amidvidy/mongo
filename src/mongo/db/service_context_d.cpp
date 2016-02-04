@@ -85,7 +85,12 @@ void ServiceContextMongoD::createLockFile() {
                 false);
     }
     bool wasUnclean = _lockFile->createdByUncleanShutdown();
-    uassertStatusOK(_lockFile->open());
+    auto openStatus = _lockFile->open();
+    if (storageGlobalParams.readOnly && openStatus == ErrorCodes::IllegalOperation) {
+        // Do nothing.
+    } else {
+        uassertStatusOK(openStatus);
+    }
     if (wasUnclean) {
         warning() << "Detected unclean shutdown - " << _lockFile->getFilespec() << " is not empty.";
     }
@@ -155,21 +160,30 @@ void ServiceContextMongoD::initializeGlobalStorageEngine() {
         uassertStatusOK(factory->validateMetadata(*metadata, storageGlobalParams));
     }
 
-    invariant(_lockFile);
-    ScopeGuard guard = MakeGuard(&StorageEngineLockFile::close, _lockFile.get());
-    _storageEngine = factory->create(storageGlobalParams, *_lockFile);
-    _storageEngine->finishInit();
-    uassertStatusOK(_lockFile->writePid());
+    if (storageGlobalParams.readOnly) {
+        invariant(metadata.get());
+        _storageEngine = factory->create(storageGlobalParams, nullptr);
+        _storageEngine->finishInit();
+    } else {
+        invariant(_lockFile);
+        ScopeGuard guard = MakeGuard(&StorageEngineLockFile::close, _lockFile.get());
 
-    // Write a new metadata file if it is not present.
-    if (!metadata.get()) {
-        metadata.reset(new StorageEngineMetadata(storageGlobalParams.dbpath));
-        metadata->setStorageEngine(factory->getCanonicalName().toString());
-        metadata->setStorageEngineOptions(factory->createMetadataOptions(storageGlobalParams));
-        uassertStatusOK(metadata->write());
+        uassertStatusOK(_lockFile->writePid());
+
+        _storageEngine = factory->create(storageGlobalParams, _lockFile.get());
+        _storageEngine->finishInit();
+        uassertStatusOK(_lockFile->writePid());
+
+        // Write a new metadata file if it is not present.
+        if (!metadata.get()) {
+            metadata.reset(new StorageEngineMetadata(storageGlobalParams.dbpath));
+            metadata->setStorageEngine(factory->getCanonicalName().toString());
+            metadata->setStorageEngineOptions(factory->createMetadataOptions(storageGlobalParams));
+            uassertStatusOK(metadata->write());
+        }
+
+        guard.Dismiss();
     }
-
-    guard.Dismiss();
 
     _supportsDocLocking = _storageEngine->supportsDocLocking();
 }
