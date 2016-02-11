@@ -3123,6 +3123,11 @@ void ReplicationCoordinatorImpl::_setLastCommittedOpTime_inlock(const OpTime& co
 
     auto maxSnapshotForOpTime = SnapshotInfo{committedOpTime, SnapshotName::max()};
 
+    if (!_uncommittedSnapshots.empty() && _uncommittedSnapshots.front() > maxSnapshotForOpTime) {
+        log() << "no snapshots are ready to be blessed. "
+              << _uncommittedSnapshots.front().name.asU64() << " "
+              << _uncommittedSnapshots.front().opTime << " and " << committedOpTime;
+    }
     if (!_uncommittedSnapshots.empty() && _uncommittedSnapshots.front() <= maxSnapshotForOpTime) {
         // At least one uncommitted snapshot is ready to be blessed as committed.
 
@@ -3526,7 +3531,15 @@ void ReplicationCoordinatorImpl::onSnapshotCreate(OpTime timeOfSnapshot, Snapsho
 
     if (timeOfSnapshot <= _lastCommittedOpTime) {
         // This snapshot is ready to be marked as committed.
-        invariant(_uncommittedSnapshots.empty());
+        if (!_uncommittedSnapshots.empty()) {
+            severe() << "timeOfSnapshot: " << timeOfSnapshot << "name: " << name.asU64()
+                     << " lastcommittedoptime: " << _lastCommittedOpTime
+                     << " num of snapshots: " << _uncommittedSnapshots.size();
+            for (auto&& ucss : _uncommittedSnapshots) {
+                log() << "snapshot: " << ucss.name.asU64() << " time: " << ucss.opTime;
+            }
+            invariant(false);
+        }
         _updateCommittedSnapshot_inlock(snapshotInfo);
         return;
     }

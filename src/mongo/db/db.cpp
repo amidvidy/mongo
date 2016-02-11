@@ -419,6 +419,36 @@ static void _initWireSpec() {
     spec.maxWireVersionOutgoing = FIND_COMMAND;
 }
 
+void sillyrun() {
+    Client::initThread("Silly");
+    auto& client = cc();
+    log() << "silly running";
+    repl::OpTime lastOpTime;
+    while (true) {
+        sleepmicros(100);
+        auto txn = client.makeOperationContext();
+        Lock::GlobalLock globalLock(txn->lockState(), MODE_IS, UINT_MAX);
+
+        AutoGetCollectionForRead oplog(txn.get(), "local.oplog.$main");
+        invariant(oplog.getCollection());
+        // Read the latest op from the oplog.
+        auto cursor = oplog.getCollection()->getCursor(txn.get(), /*forward*/ false);
+        auto record = cursor->next();
+        if (!record)
+            continue;  // oplog is completely empty.
+
+        const auto op = record->data.releaseToBson();
+        repl::OpTime opTimeOfSnapshot =
+            fassertStatusOK(99780, repl::OpTime::parseFromOplogEntry(op));
+        invariant(!opTimeOfSnapshot.isNull());
+        if (lastOpTime > opTimeOfSnapshot) {
+            log() << "lastOpTime: " << lastOpTime << " newOpTime: " << opTimeOfSnapshot;
+            invariant(false);
+        }
+        lastOpTime = opTimeOfSnapshot;
+    }
+}
+
 
 static void _initAndListen(int listenPort) {
     Client::initThread("initandlisten");
@@ -656,6 +686,9 @@ static void _initAndListen(int listenPort) {
 
         logStartup(startupOpCtx.get());
     }
+
+
+    //    new stdx::thread([] { sillyrun(); });
 
     // MessageServer::run will return when exit code closes its socket and we don't need the
     // operation context anymore

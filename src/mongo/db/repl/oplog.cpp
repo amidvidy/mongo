@@ -1089,7 +1089,7 @@ void signalOplogWaiters() {
     }
 }
 
-MONGO_EXPORT_STARTUP_SERVER_PARAMETER(replSnapshotThreadThrottleMicros, int, 1000);
+MONGO_EXPORT_STARTUP_SERVER_PARAMETER(replSnapshotThreadThrottleMicros, int, 100);
 
 SnapshotThread::SnapshotThread(SnapshotManager* manager)
     : _manager(manager), _thread([this] { run(); }) {}
@@ -1129,6 +1129,7 @@ void SnapshotThread::run() {
     auto replCoord = ReplicationCoordinator::get(serviceContext);
 
     Timestamp lastTimestamp = {};
+    OpTime lastOpTime;
     while (true) {
         // This block logically belongs at the end of the loop, but having it at the top
         // simplifies handling of the "continue" cases. It is harmless to do these before the
@@ -1207,6 +1208,11 @@ void SnapshotThread::run() {
                 const auto op = record->data.releaseToBson();
                 opTimeOfSnapshot = fassertStatusOK(28780, OpTime::parseFromOplogEntry(op));
                 invariant(!opTimeOfSnapshot.isNull());
+                if (lastOpTime > opTimeOfSnapshot) {
+                    log() << "lastOpTime: " << lastOpTime << " newOpTime: " << opTimeOfSnapshot;
+                    invariant(false);
+                }
+                lastOpTime = opTimeOfSnapshot;
             }
 
             _manager->createSnapshot(txn.get(), name);
@@ -1235,10 +1241,12 @@ void SnapshotThread::forceSnapshot() {
     newTimestampNotifier.notify_all();
 }
 
+
 std::unique_ptr<SnapshotThread> SnapshotThread::start(ServiceContext* service) {
     if (auto manager = service->getGlobalStorageEngine()->getSnapshotManager()) {
         return std::unique_ptr<SnapshotThread>(new SnapshotThread(manager));
     }
+
     return {};
 }
 

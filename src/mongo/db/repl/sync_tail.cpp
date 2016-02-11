@@ -1084,8 +1084,8 @@ void multiSyncApply(const std::vector<BSONObj>& ops, SyncTail* st) {
                 } catch (const DBException& e) {
                     // The group insert failed, log an error and fall through to the
                     // application of an individual op.
-                    error() << "Error applying inserts in bulk " << causedBy(e)
-                            << " trying first insert as a lone insert";
+                    // error() << "Error applying inserts in bulk " << causedBy(e)
+                    //        << " trying first insert as a lone insert";
 
                     if (inShutdown()) {
                         return;

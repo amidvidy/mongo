@@ -33,7 +33,7 @@ functions:
         script: |
           set -e
           set -v
-          git clone git@github.com:10gen/dsi.git
+          git clone git@github.com:milkie/dsi.git
           cd dsi
           # setup execution environment
           ./bin/setup-dsi-env.sh
@@ -231,7 +231,7 @@ functions:
           set -e
           set -v
           rm -rf ./dsi
-          git clone git@github.com:10gen/dsi.git
+          git clone git@github.com:milkie/dsi.git
     - command: json.get
       params:
         task: ${compare_task}
