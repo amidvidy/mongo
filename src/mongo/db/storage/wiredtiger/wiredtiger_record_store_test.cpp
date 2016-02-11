@@ -28,26 +28,30 @@
  *    it in the license file.
  */
 
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
+
 #include "mongo/platform/basic.h"
 
 #include <sstream>
 #include <string>
 
+#include "mongo/base/checked_cast.h"
 #include "mongo/base/string_data.h"
 #include "mongo/bson/bsonobjbuilder.h"
-#include "mongo/base/checked_cast.h"
 #include "mongo/db/concurrency/write_conflict_exception.h"
 #include "mongo/db/json.h"
 #include "mongo/db/operation_context_noop.h"
 #include "mongo/db/storage/record_store_test_harness.h"
-#include "mongo/db/storage/wiredtiger/wiredtiger_recovery_unit.h"
 #include "mongo/db/storage/wiredtiger/wiredtiger_record_store.h"
 #include "mongo/db/storage/wiredtiger/wiredtiger_record_store_oplog_stones.h"
+#include "mongo/db/storage/wiredtiger/wiredtiger_recovery_unit.h"
 #include "mongo/db/storage/wiredtiger/wiredtiger_session_cache.h"
 #include "mongo/db/storage/wiredtiger/wiredtiger_size_storer.h"
 #include "mongo/db/storage/wiredtiger/wiredtiger_util.h"
 #include "mongo/unittest/temp_dir.h"
 #include "mongo/unittest/unittest.h"
+#include "mongo/util/log.h"
+#include "mongo/util/scopeguard.h"
 
 namespace mongo {
 
@@ -715,6 +719,72 @@ TEST(WiredTigerRecordStoreTest, CappedOrder) {
         ASSERT(cursor->next());
         ASSERT(cursor->next());
         ASSERT(!cursor->next());
+    }
+}
+
+TEST(WiredTigerRecordStoreTest, CappedReverseCursorInserts) {
+    unique_ptr<WiredTigerHarnessHelper> harnessHelper(new WiredTigerHarnessHelper());
+    unique_ptr<RecordStore> rs(
+        harnessHelper->newCappedRecordStore("local.oplog.test", 100000, 10000));
+
+    std::vector<stdx::thread> inserters;
+
+    const std::size_t nThreads = 4;
+    std::atomic<std::uint64_t> opId{1};
+    std::atomic<bool> done;
+
+    log() << "starting insertion threads";
+
+    for (std::size_t i = 0; i < nThreads; ++i) {
+        inserters.emplace_back([&] {
+            while (!done.load()) {
+                unique_ptr<OperationContext> opCtx(harnessHelper->newOperationContext());
+                auto data = BSON("ts" << Timestamp(opId.fetch_add(1)));
+                WriteUnitOfWork uow(opCtx.get());
+                StatusWith<RecordId> res =
+                    rs->insertRecord(opCtx.get(), data.objdata(), data.objsize(), false);
+
+                if (!res.isOK()) {
+                    std::cout << res.getStatus() << std::endl;
+                }
+
+                ASSERT_OK(res.getStatus());
+                uow.commit();
+            }
+        });
+    }
+
+    ON_BLOCK_EXIT([&] {
+        done.store(true);
+        for (auto& inserter : inserters) {
+            inserter.join();
+        }
+    });
+
+    Timestamp last(0);
+
+    while (true) {
+        unique_ptr<OperationContext> opCtx(harnessHelper->newOperationContext());
+        auto cursor = rs->getCursor(opCtx.get(), /* forward */ false);
+        auto record = cursor->next();
+        if (!record)
+            continue;
+
+        const auto op = record->data.releaseToBson();
+        ASSERT_EQ(op["ts"].type(), bsonTimestamp);
+        auto next = op["ts"].timestamp();
+
+        // Check that the timestamps we read are monotonically increasing. Since we are inserting
+        // increasing timestamps at the end, and always creating a reverse cursor, we should always
+        // an increased (or the same) value.
+        if (last > next) {
+            log() << "NOT INCREASING: last = " << last.toStringPretty()
+                  << ", next = " << next.toStringPretty();
+        }
+
+        ASSERT_LTE(last, next);
+
+        last = next;
     }
 }
 
