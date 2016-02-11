@@ -28,26 +28,33 @@
  *    it in the license file.
  */
 
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kStorage
+
 #include "mongo/platform/basic.h"
 
 #include <boost/scoped_ptr.hpp>
 #include <sstream>
 #include <string>
+#include <thread>
 
+#include "mongo/base/checked_cast.h"
 #include "mongo/base/string_data.h"
 #include "mongo/bson/bsonobjbuilder.h"
-#include "mongo/base/checked_cast.h"
 #include "mongo/db/concurrency/write_conflict_exception.h"
+#include "mongo/db/exec/collection_scan_common.h"
 #include "mongo/db/json.h"
 #include "mongo/db/operation_context_noop.h"
+#include "mongo/db/storage/oplog_hack.h"
 #include "mongo/db/storage/record_store_test_harness.h"
-#include "mongo/db/storage/wiredtiger/wiredtiger_recovery_unit.h"
 #include "mongo/db/storage/wiredtiger/wiredtiger_record_store.h"
+#include "mongo/db/storage/wiredtiger/wiredtiger_recovery_unit.h"
 #include "mongo/db/storage/wiredtiger/wiredtiger_session_cache.h"
 #include "mongo/db/storage/wiredtiger/wiredtiger_size_storer.h"
 #include "mongo/db/storage/wiredtiger/wiredtiger_util.h"
 #include "mongo/unittest/temp_dir.h"
 #include "mongo/unittest/unittest.h"
+#include "mongo/util/log.h"
+#include "mongo/util/scopeguard.h"
 
 namespace mongo {
 
@@ -691,6 +698,92 @@ TEST(WiredTigerRecordStoreTest, CappedOrder) {
         ASSERT(!it->isEOF());
         it->getNext();
         ASSERT(it->isEOF());
+    }
+}
+
+using std::unique_ptr;
+
+TEST(WiredTigerRecordStoreTest, CappedReverseCursorInserts) {
+    unique_ptr<WiredTigerHarnessHelper> harnessHelper(new WiredTigerHarnessHelper());
+    unique_ptr<RecordStore> rs(
+        harnessHelper->newCappedRecordStore("local.oplog.test", 100000, 10000));
+
+    std::vector<std::thread> inserters;
+
+    const std::size_t nThreads = 1;
+    std::atomic<std::uint64_t> opId{1};
+    std::atomic<bool> done{false};
+
+    log() << "starting insertion threads";
+
+    for (std::size_t i = 0; i < nThreads; ++i) {
+        inserters.emplace_back([&] {
+            while (!done.load()) {
+                unique_ptr<OperationContext> opCtx(harnessHelper->newOperationContext());
+                auto data = BSON("ts" << OpTime(opId.fetch_add(1)));
+                WriteUnitOfWork uow(opCtx.get());
+                StatusWith<RecordId> res =
+                    rs->insertRecord(opCtx.get(), data.objdata(), data.objsize(), false);
+
+                if (!res.isOK()) {
+                    log() << res.getStatus();
+                }
+
+                ASSERT_OK(res.getStatus());
+                uow.commit();
+            }
+        });
+    }
+
+    ON_BLOCK_EXIT([&] {
+        done.store(true);
+        for (auto& inserter : inserters) {
+            inserter.join();
+        }
+    });
+
+    OpTime last(0);
+
+    while (true) {
+        unique_ptr<OperationContext> opCtx(harnessHelper->newOperationContext());
+        unique_ptr<RecordIterator> cursor(
+            rs->getIterator(opCtx.get(), RecordId(), CollectionScanParams::BACKWARD));
+
+        if (cursor->isEOF()) {
+            continue;
+        }
+
+        auto record = cursor->dataFor(cursor->getNext());
+
+        const auto op = record.releaseToBson();
+
+        ASSERT_EQ(op["ts"].type(), Timestamp);
+        auto next = op["ts"]._opTime();
+
+        // Check that the timestamps we read are monotonically increasing. Since we are inserting
+        // increasing timestamps at the end, and always creating a reverse cursor, we should always
+        // an increased (or the same) value.
+        if (last > next) {
+            log() << "NOT INCREASING: last = " << last.toStringPretty()
+                  << ", next = " << next.toStringPretty();
+
+            auto swLastRecId = oploghack::keyForOptime(last);
+            ASSERT_OK(swLastRecId.getStatus());
+            auto lastRecId = swLastRecId.getValue();
+
+            unique_ptr<RecordIterator> cursor2;
+            cursor2.reset(rs->getIterator(opCtx.get(), lastRecId, CollectionScanParams::BACKWARD));
+
+            auto lastRec = cursor2->dataFor(lastRecId);
+
+            if (lastRec.releaseToBson()["ts"]._opTime() == last) {
+                log() << "found the higher key '" << last << "' in the record store...";
+            }
+        }
+
+        // ASSERT_LTE(last, next);
+
+        last = next;
     }
 }
 
