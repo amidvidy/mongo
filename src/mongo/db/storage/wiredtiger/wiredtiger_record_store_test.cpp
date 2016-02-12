@@ -732,7 +732,7 @@ TEST(WiredTigerRecordStoreTest, CappedReverseCursorInserts) {
 
     const std::size_t nThreads = 1;
     std::atomic<std::uint64_t> opId{1};
-    std::atomic<bool> done;
+    std::atomic<bool> done{false};
 
     log() << "starting insertion threads";
 
