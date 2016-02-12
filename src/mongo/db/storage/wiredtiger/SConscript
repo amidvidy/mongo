@@ -141,3 +141,12 @@ if wiredtiger:
             'storage_wiredtiger_mock',
             ],
         )
+
+    wtEnv.CppUnitTest(
+        target='storage_wiredtiger_cursor_repro',
+        source=['wiredtiger_cursor_repro.cpp'],
+        LIBDEPS=[
+            '$BUILD_DIR/mongo/base',
+            '$BUILD_DIR/third_party/shim_wiredtiger',
+        ],
+    )
