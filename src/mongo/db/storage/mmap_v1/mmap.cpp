@@ -113,7 +113,9 @@ void* MemoryMappedFile::map(const char* filename) {
 */
 
 MongoFile::MongoFile(OptionSet options)
-    : _options(storageGlobalParams.readOnly ? (options | READONLY) : options) {}
+    : _options(storageGlobalParams.readOnly ? (options | READONLY) : options) {
+    log() << "file is readOnly ? " << std::boolalpha << isOptionSet(READONLY);
+}
 
 
 RWLockRecursiveNongreedy LockMongoFilesShared::mmmutex("mmmutex", 10 * 60 * 1000 /* 10 minutes */);

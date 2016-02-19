@@ -457,7 +457,7 @@ public:
 };
 
 void MemoryMappedFile::flush(bool sync) {
-    invariant(!(isOptionSet(Options::READONLY));
+    invariant(!(isOptionSet(Options::READONLY)));
     uassert(13056, "Async flushing not supported on windows", sync);
     if (!views.empty()) {
         WindowsFlushable f(this, viewForFlushing(), fd, _uniqueId, filename(), _flushMutex);
