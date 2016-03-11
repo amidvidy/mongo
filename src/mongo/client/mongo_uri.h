@@ -113,6 +113,8 @@ public:
     explicit MongoURI(const ConnectionString connectString)
         : _connectString(std::move(connectString)){};
 
+    MongoURI() = default;
+
 private:
     MongoURI(ConnectionString connectString,
              const std::string& user,
