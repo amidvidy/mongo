@@ -300,7 +300,7 @@ MmapV1RecordHeader* MmapV1ExtentManager::recordForV1(const DiskLoc& loc) const {
 std::unique_ptr<RecordFetcher> MmapV1ExtentManager::recordNeedsFetch(const DiskLoc& loc) const {
     if (loc.isNull())
         return {};
-    MmapV1RecordHeader* record = _recordForV1(loc);
+    MmapV1RecordHeader* record = recordForV1(loc);
 
     // For testing: if failpoint is enabled we randomly request fetches without
     // going to the RecordAccessTracker.
